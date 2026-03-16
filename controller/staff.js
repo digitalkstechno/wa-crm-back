@@ -1,25 +1,17 @@
 const STAFF = require("../model/staff");
 const { encryptData, decryptData } = require("../utils/crypto");
-const { deleteUploadedFile } = require("../utils/fileHelper");
 const jwt = require("jsonwebtoken");
 
 exports.createStaff = async (req, res) => {
   try {
-    const { fullName, email, phone, role, password } = req.body;
+    const { fullName, email, phone, password } = req.body;
 
-    const encryptedPassword = encryptData(password);
-
-    const staffData = {
-      profileImage: req.file ? req.file.filename : null,
+    const staffDetails = await STAFF.create({
       fullName,
       email,
       phone,
-      role,
-      status: "active",
-      password: encryptedPassword,
-    };
-
-    const staffDetails = await STAFF.create(staffData);
+      password: encryptData(password),
+    });
 
     return res.status(201).json({
       status: "Success",
@@ -27,9 +19,6 @@ exports.createStaff = async (req, res) => {
       data: staffDetails,
     });
   } catch (error) {
-    if (req.file) {
-      deleteUploadedFile("images/StaffProfileImages", req.file.filename);
-    }
     return res.status(400).json({
       status: "Fail",
       message: error.message,
@@ -40,16 +29,15 @@ exports.createStaff = async (req, res) => {
 exports.loginStaff = async (req, res) => {
   try {
     const { email, password } = req.body;
-    let staffverify = await STAFF.findOne({ email }).populate("role");
+    const staffverify = await STAFF.findOne({ email });
     if (!staffverify) {
       throw new Error("Invalid Email or password");
     }
-    let decryptedPassword = decryptData(staffverify.password);
-
+    const decryptedPassword = decryptData(staffverify.password);
     if (String(decryptedPassword) !== password) {
       throw new Error("Invalid password");
     }
-    let token = jwt.sign({ id: staffverify._id }, process.env.JWT_SECRET_KEY);
+    const token = jwt.sign({ id: staffverify._id }, process.env.JWT_SECRET_KEY);
     return res.status(200).json({
       status: "Success",
       message: "Staff logged in successfully",
@@ -69,7 +57,6 @@ exports.fetchAllStaffs = async (req, res) => {
     const page = parseInt(req.query.page) || 1;
     const limit = parseInt(req.query.limit) || 10;
     const skip = (page - 1) * limit;
-
     const search = req.query.search || "";
 
     const query = {
@@ -77,7 +64,6 @@ exports.fetchAllStaffs = async (req, res) => {
         { fullName: { $regex: search, $options: "i" } },
         { email: { $regex: search, $options: "i" } },
         { phone: { $regex: search, $options: "i" } },
-        { status: { $regex: search, $options: "i" } },
       ],
     };
 
@@ -85,8 +71,7 @@ exports.fetchAllStaffs = async (req, res) => {
     const staffsData = await STAFF.find(query)
       .skip(skip)
       .limit(limit)
-      .sort({ createdAt: -1 })
-      .populate("role");
+      .sort({ createdAt: -1 });
 
     return res.status(200).json({
       status: "Success",
@@ -109,11 +94,8 @@ exports.fetchAllStaffs = async (req, res) => {
 
 exports.fetchStaffById = async (req, res) => {
   try {
-    let staffId = req.params.id;
-    let staffData = await STAFF.findById(staffId).populate("role");
-    if (!staffData) {
-      throw new Error("Staff not found");
-    }
+    const staffData = await STAFF.findById(req.params.id);
+    if (!staffData) throw new Error("Staff not found");
     return res.status(200).json({
       status: "Success",
       message: "Staff fetched successfully",
@@ -129,13 +111,6 @@ exports.fetchStaffById = async (req, res) => {
 
 exports.getCurrentStaff = async (req, res) => {
   try {
-    if (!req.user) {
-      return res.status(401).json({
-        status: "Fail",
-        message: "Unauthorized",
-      });
-    }
-
     return res.status(200).json({
       status: "Success",
       data: req.user,
@@ -149,36 +124,25 @@ exports.getCurrentStaff = async (req, res) => {
 };
 
 exports.staffUpdate = async (req, res) => {
-  console.log(req.body.password);
-
   try {
-    let staffId = req.params.id;
-    let oldStaff = await STAFF.findById(staffId);
+    const staffId = req.params.id;
+    const oldStaff = await STAFF.findById(staffId);
+    if (!oldStaff) throw new Error("Staff not found");
 
-    if (!oldStaff) {
-      throw new Error("Staff not found");
-    }
-    if (req.body.password) {
-      req.body.password = encryptData(req.body.password);
-    }
+    const { fullName, email, phone, password } = req.body;
+    const updateData = {};
+    if (fullName) updateData.fullName = fullName;
+    if (email) updateData.email = email;
+    if (phone) updateData.phone = phone;
+    if (password) updateData.password = encryptData(password);
 
-    if (req.file) {
-      deleteUploadedFile("images/StaffProfileImages", oldStaff.profileImage);
-      req.body.profileImage = req.file.filename;
-    }
-
-    let updatedStaff = await STAFF.findByIdAndUpdate(staffId, req.body, {
-      new: true,
-    });
+    const updatedStaff = await STAFF.findByIdAndUpdate(staffId, updateData, { new: true });
     return res.status(200).json({
       status: "Success",
       message: "Staff updated successfully",
       data: updatedStaff,
     });
   } catch (error) {
-    if (req.file) {
-      deleteUploadedFile("images/StaffProfileImages", req.file.filename);
-    }
     return res.status(404).json({
       status: "Fail",
       message: error.message,
@@ -186,19 +150,11 @@ exports.staffUpdate = async (req, res) => {
   }
 };
 
-exports.staffDelete =  async (req, res) => {
+exports.staffDelete = async (req, res) => {
   try {
-    let staffId = req.params.id;
-    let oldStaff = await STAFF.findById(staffId);
-
-    if (!oldStaff) {
-      throw new Error("Staff not found");
-    }
-    if (oldStaff.profileImage) {
-      deleteUploadedFile("images/StaffProfileImages", oldStaff.profileImage);
-    }
-    await STAFF.findByIdAndDelete(staffId);
-
+    const oldStaff = await STAFF.findById(req.params.id);
+    if (!oldStaff) throw new Error("Staff not found");
+    await STAFF.findByIdAndDelete(req.params.id);
     return res.status(200).json({
       status: "Success",
       message: "Staff deleted successfully",
