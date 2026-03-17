@@ -72,3 +72,29 @@ exports.deleteGroup = async (req, res) => {
     return res.status(400).json({ status: 'Fail', message: error.message });
   }
 };
+
+exports.fetchAllGroups = async (req, res) => {
+  try {
+    const groups = await CustomerGroup.find().populate({
+      path: 'members',
+      select: 'name phone _id', // Changed fullName to name
+    });
+    
+    // Add count for each group
+    const groupsWithCount = groups.map(g => ({
+      ...g.toObject(),
+      count: g.members?.length || 0
+    }));
+
+    return res.status(200).json({
+      status: "Success",
+      message: "Customer-Groups fetched successfully",
+      data: groupsWithCount,
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "Fail",
+      message: error.message,
+    });
+  }
+};

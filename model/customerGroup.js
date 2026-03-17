@@ -6,7 +6,17 @@ const CustomerGroupSchema = new mongoose.Schema(
     description: { type: String, default: '' },
     color: { type: String, default: '#10b981' },
   },
-  { timestamps: true }
+  { 
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+  }
 );
+
+CustomerGroupSchema.virtual('members', {
+  ref: 'Customer',
+  localField: '_id',
+  foreignField: 'group'
+});
 
 module.exports = mongoose.model('CustomerGroup', CustomerGroupSchema);
