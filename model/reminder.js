@@ -50,4 +50,9 @@ const ReminderSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// Production indexes for fast queries
+ReminderSchema.index({ status: 1, scheduledAt: 1 }); // Cron worker: find due reminders
+ReminderSchema.index({ createdBy: 1, status: 1 });    // API: user's reminders by status
+ReminderSchema.index({ createdBy: 1, scheduledAt: -1 }); // API: user's reminders sorted
+
 module.exports = mongoose.model('Reminder', ReminderSchema);

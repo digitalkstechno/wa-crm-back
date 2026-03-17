@@ -4,7 +4,7 @@ exports.createReminder = async (req, res) => {
   try {
     const reminderData = {
       ...req.body,
-      createdBy: req.user._id, // Set by authMiddleware
+      createdBy: req.user._id,
     };
 
     const reminder = await REMINDER.create(reminderData);
@@ -24,16 +24,12 @@ exports.createReminder = async (req, res) => {
 
 exports.getReminders = async (req, res) => {
   try {
-    const { status, type } = req.query;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
     const query = { createdBy: req.user._id };
 
-    if (status) query.status = status;
-    if (type) query.type = type;
-
-    // Logic for "Upcoming" vs "Completed" vs "Failed" based on tab
-    // Upcoming = Scheduled | Pending
-    // Completed = Sent
-    // Failed = Failed
     const filterType = req.query.filterType || 'all';
     if (filterType === 'upcoming') {
       query.status = { $in: ['Scheduled', 'Pending'] };
@@ -43,25 +39,44 @@ exports.getReminders = async (req, res) => {
       query.status = 'Failed';
     }
 
-    const reminders = await REMINDER.find(query)
-      .populate('customer')
-      .populate('customers')
-      .populate('groups')
-      .populate('template')
-      .sort({ scheduledAt: 1 });
+    // Run data + count + stats in parallel (single DB roundtrip pattern)
+    const [reminders, total, statsAgg] = await Promise.all([
+      REMINDER.find(query)
+        .populate('customer', 'name phone')
+        .populate('customers', 'name phone')
+        .populate('groups', 'name color')
+        .populate('template', 'name body')
+        .sort({ scheduledAt: filterType === 'completed' ? -1 : 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      REMINDER.countDocuments(query),
+      // Single aggregation for all stats instead of 3 separate countDocuments
+      REMINDER.aggregate([
+        { $match: { createdBy: req.user._id } },
+        {
+          $group: {
+            _id: null,
+            sent: { $sum: { $cond: [{ $eq: ['$status', 'Sent'] }, 1, 0] } },
+            pending: { $sum: { $cond: [{ $in: ['$status', ['Scheduled', 'Pending']] }, 1, 0] } },
+            failed: { $sum: { $cond: [{ $eq: ['$status', 'Failed'] }, 1, 0] } },
+          },
+        },
+      ]),
+    ]);
 
-    // Optional: Add stats to response
-    const stats = {
-      sent: await REMINDER.countDocuments({ createdBy: req.user._id, status: 'Sent' }),
-      pending: await REMINDER.countDocuments({ createdBy: req.user._id, status: { $in: ['Scheduled', 'Pending'] } }),
-      failed: await REMINDER.countDocuments({ createdBy: req.user._id, status: 'Failed' }),
-    };
+    const stats = statsAgg[0] || { sent: 0, pending: 0, failed: 0 };
 
     return res.status(200).json({
       status: "Success",
-      message: "Reminders fetched successfully",
       data: reminders,
-      stats,
+      stats: { sent: stats.sent, pending: stats.pending, failed: stats.failed },
+      pagination: {
+        totalRecords: total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        limit,
+      },
     });
   } catch (error) {
     return res.status(500).json({
@@ -74,10 +89,11 @@ exports.getReminders = async (req, res) => {
 exports.getReminderById = async (req, res) => {
   try {
     const reminder = await REMINDER.findById(req.params.id)
-      .populate('customer')
-      .populate('customers')
-      .populate('groups')
-      .populate('template');
+      .populate('customer', 'name phone')
+      .populate('customers', 'name phone')
+      .populate('groups', 'name color')
+      .populate('template', 'name body')
+      .lean();
 
     if (!reminder) throw new Error("Reminder not found");
 
@@ -95,7 +111,7 @@ exports.getReminderById = async (req, res) => {
 
 exports.updateReminder = async (req, res) => {
   try {
-    const reminder = await REMINDER.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const reminder = await REMINDER.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
     if (!reminder) throw new Error("Reminder not found");
 
     return res.status(200).json({
