@@ -109,6 +109,30 @@ exports.fetchStaffById = async (req, res) => {
   }
 };
 
+exports.updateMe = async (req, res) => {
+  try {
+    const { fullName, email, phone, currentPassword, newPassword } = req.body;
+    const staff = await STAFF.findById(req.user._id);
+
+    const updateData = {};
+    if (fullName) updateData.fullName = fullName;
+    if (email) updateData.email = email;
+    if (phone) updateData.phone = phone;
+
+    if (newPassword) {
+      if (!currentPassword) throw new Error('Current password is required');
+      const decrypted = decryptData(staff.password);
+      if (String(decrypted) !== currentPassword) throw new Error('Current password is incorrect');
+      updateData.password = encryptData(newPassword);
+    }
+
+    const updated = await STAFF.findByIdAndUpdate(req.user._id, updateData, { new: true });
+    return res.status(200).json({ status: 'Success', message: 'Profile updated successfully', data: updated });
+  } catch (error) {
+    return res.status(400).json({ status: 'Fail', message: error.message });
+  }
+};
+
 exports.getCurrentStaff = async (req, res) => {
   try {
     return res.status(200).json({
