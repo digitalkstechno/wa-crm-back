@@ -18,7 +18,8 @@ const ReminderSchema = new mongoose.Schema(
     newName: { type: String, default: '' },
     newPhone: { type: String, default: '' },
 
-    template: { type: mongoose.Schema.Types.ObjectId, ref: 'Template', required: true },
+    template: { type: mongoose.Schema.Types.ObjectId, ref: 'Template', default: null },
+    customMessage: { type: String, default: '' },
     scheduledAt: { type: Date, required: true },
     status: {
       type: String,

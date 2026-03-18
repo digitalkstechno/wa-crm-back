@@ -2,8 +2,16 @@ const REMINDER = require("../model/reminder");
 
 exports.createReminder = async (req, res) => {
   try {
+    const { template, customMessage, ...rest } = req.body;
+
+    if (!template && !customMessage?.trim()) {
+      return res.status(400).json({ status: 'Fail', message: 'Either a template or a custom message is required.' });
+    }
+
     const reminderData = {
-      ...req.body,
+      ...rest,
+      ...(template ? { template } : {}),
+      ...(customMessage ? { customMessage } : {}),
       createdBy: req.user._id,
     };
 
