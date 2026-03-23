@@ -8,5 +8,7 @@ router.use("/customer-groups", require("./customerGroup"));
 router.use("/templates", require("./template"));
 router.use("/reminders", require("./reminder"));
 router.use("/dashboard", require("./dashboard"));
+router.use("/tasks", require("./task"));
+router.use("/task-statuses", require("./taskStatus"));
 
 module.exports = router;
