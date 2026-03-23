@@ -3,6 +3,7 @@ const mongoose = require('mongoose');
 const ReminderSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
+    reminderName: { type: String, default: '' },
     recipientType: {
       type: String,
       enum: ['new', 'customers', 'groups'],
