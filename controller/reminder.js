@@ -41,6 +41,7 @@ exports.getReminders = async (req, res) => {
     const filterType = req.query.filterType || 'all';
     if (filterType === 'upcoming') {
       query.status = { $in: ['Scheduled', 'Pending'] };
+       query.scheduledAt = { $gte: new Date() };
     } else if (filterType === 'completed') {
       query.status = 'Sent';
     } else if (filterType === 'failed') {
