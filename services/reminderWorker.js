@@ -10,29 +10,62 @@ let isProcessing = false;
  * arg1 = customer name, arg2 = reminder ID, arg3 = template body
  */
 const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
-  const WA_API_URL = process.env.WA_API_URL;
-  const WA_TEMPLATE_ID = process.env.WA_TEMPLATE_ID || 'orderupdategurukul';
+  const WA_API_DOMAIN = process.env.WA_API_DOMAIN || 'https://crmapi.crmbot.in';
+  const WA_API_VERSION = process.env.WA_API_VERSION || 'v19.0';
+  const WA_PHONE_NUMBER_ID = process.env.WA_PHONE_NUMBER_ID || '730141010176205';
+  const WA_ACCESS_TOKEN = process.env.WA_ACCESS_TOKEN;
+  const WA_TEMPLATE_ID = process.env.WA_TEMPLATE_ID || 'order_data';
   const WA_TEMPLATE_LANG = process.env.WA_TEMPLATE_LANG || 'en';
 
-  if (!WA_API_URL) {
-    throw new Error('WA_API_URL is missing in environment variables');
+  if (!WA_ACCESS_TOKEN) {
+    throw new Error('WA_ACCESS_TOKEN is missing in environment variables');
   }
 
-  // Ensure phone has country code format (91XXXXXXXXXX)
   const cleanPhone = phone.replace(/[^0-9]/g, '');
   const senderPhone = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
   console.log('cleanPhone', cleanPhone, 'senderPhone', senderPhone);
+
+  const url = `${WA_API_DOMAIN}/api/meta/${WA_API_VERSION}/${WA_PHONE_NUMBER_ID}/messages`;
+
   const payload = {
-    type: 'richTemplate',
-    templateId: WA_TEMPLATE_ID,
-    templateLanguage: WA_TEMPLATE_LANG,
-    templateArgs: [customerName, String(reminderId), templateBody],
-    sender_phone: senderPhone,
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: senderPhone,
+    type: "template",
+    template: {
+      language: {
+        policy: "deterministic",
+        code: WA_TEMPLATE_LANG
+      },
+      name: WA_TEMPLATE_ID,
+      components: [
+        {
+          type: "body",
+          parameters: [
+            {
+              type: "text",
+              text: customerName
+            },
+            {
+              type: "text",
+              text: Math.random().toString().slice(2,8)
+            },
+            {
+              type: "text",
+              text: templateBody
+            }
+          ]
+        }
+      ]
+    }
   };
 
-  const res = await fetch(WA_API_URL, {
+  const res = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${WA_ACCESS_TOKEN}`
+    },
     body: JSON.stringify(payload),
   });
 
