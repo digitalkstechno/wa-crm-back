@@ -1,5 +1,7 @@
 const REMINDER = require('../model/reminder');
 const User = require('../model/user');
+const Task = require('../model/task');
+const TaskStatus = require('../model/taskStatus');
 
 exports.getDashboard = async (req, res) => {
   try {
@@ -9,15 +11,21 @@ exports.getDashboard = async (req, res) => {
     const last30Days = new Date(now);
     last30Days.setDate(last30Days.getDate() - 29);
 
+    // Get basic counts
+    const totalUsers = await User.countDocuments();
+    const totalTasks = await Task.countDocuments();
+    
+    // For pending tasks, we assume any task status that doesn't sound like "Completed" or "Done" is pending.
+    // To be safe, let's just get the count of all tasks and maybe group them by status.
+    
+    // Aggregations
     const [
-      totalUsers,
-      statsAgg,
-      chartAgg,
-      recentReminders,
+      reminderStatsAgg,
+      reminderChartAgg,
+      taskStatusAgg,
+      recentTasks,
     ] = await Promise.all([
-      User.countDocuments(),
-
-      // Stats aggregation
+      // 1. Reminder Stats
       REMINDER.aggregate([
         { $match: { createdBy: userId } },
         {
@@ -33,7 +41,7 @@ exports.getDashboard = async (req, res) => {
         },
       ]),
 
-      // Last 30 days chart — group by date
+      // 2. Reminder Chart (Last 30 days)
       REMINDER.aggregate([
         {
           $match: {
@@ -54,43 +62,79 @@ exports.getDashboard = async (req, res) => {
         { $project: { _id: 0, name: '$_id', sent: 1 } },
       ]),
 
-      // Recent 5 reminders
-      REMINDER.find({ createdBy: userId })
-        .sort({ scheduledAt: -1 })
+      // 3. Task Status Aggregation
+      Task.aggregate([
+        {
+          $group: {
+            _id: '$status',
+            count: { $sum: 1 }
+          }
+        }
+      ]),
+
+      // 4. Recent Tasks (Last 5 created/updated)
+      Task.find()
+        .sort({ updatedAt: -1 })
         .limit(5)
-        .populate('users', 'name')
-        .populate('template', 'name')
-        .select('title status scheduledAt recipientType newName users groups')
+        .populate('status')
+        .populate('customer', 'name phone email')
+        .populate('assignedTo', 'fullName email')
         .lean(),
     ]);
 
-    const s = statsAgg[0] || { activeReminders: 0, sentToday: 0, failedToday: 0, totalSent: 0, totalPending: 0, totalFailed: 0 };
-    const total = s.totalSent + s.totalPending + s.totalFailed || 1;
+    // Format Reminder Stats
+    const rs = reminderStatsAgg[0] || { activeReminders: 0, sentToday: 0, failedToday: 0, totalSent: 0, totalPending: 0, totalFailed: 0 };
+    const rTotal = rs.totalSent + rs.totalPending + rs.totalFailed || 1;
+
+    // Format Task Status Pie Chart
+    // Need to populate status names and colors
+    const populatedTaskStatuses = await TaskStatus.populate(taskStatusAgg, { path: '_id' });
+    let pendingTasksCount = 0;
+    
+    const taskPie = populatedTaskStatuses.map(item => {
+      const statusObj = item._id || { name: 'Unknown', color: '#9ca3af' };
+      // Arbitrary logic: if status name contains "Done" or "Completed", it's not pending
+      const isCompleted = ['done', 'completed'].includes(statusObj.name.toLowerCase());
+      if (!isCompleted) {
+        pendingTasksCount += item.count;
+      }
+      return {
+        name: statusObj.name,
+        value: item.count,
+        color: statusObj.color || '#3b82f6'
+      };
+    });
 
     return res.status(200).json({
       status: 'Success',
       data: {
         stats: {
           totalUsers,
-          activeReminders: s.activeReminders,
-          sentToday: s.sentToday,
-          failedToday: s.failedToday,
+          totalTasks,
+          pendingTasks: pendingTasksCount,
+          activeReminders: rs.activeReminders,
+          sentToday: rs.sentToday,
+          failedToday: rs.failedToday,
         },
-        chart: chartAgg,
-        pie: [
-          { name: 'Sent', value: Math.round((s.totalSent / total) * 100), color: '#10b981' },
-          { name: 'Pending', value: Math.round((s.totalPending / total) * 100), color: '#3b82f6' },
-          { name: 'Failed', value: Math.round((s.totalFailed / total) * 100), color: '#ef4444' },
-        ],
-        recentActivity: recentReminders.map(r => ({
-          _id: r._id,
-          title: r.title,
-          status: r.status,
-          scheduledAt: r.scheduledAt,
-          userName:
-            r.recipientType === 'users' && r.users?.length
-              ? r.users[0].name
-              : r.newName || 'Unknown',
+        chart: reminderChartAgg,
+        pie: {
+          reminders: [
+            { name: 'Sent', value: Math.round((rs.totalSent / rTotal) * 100), color: '#10b981' },
+            { name: 'Pending', value: Math.round((rs.totalPending / rTotal) * 100), color: '#3b82f6' },
+            { name: 'Failed', value: Math.round((rs.totalFailed / rTotal) * 100), color: '#ef4444' },
+          ],
+          tasks: taskPie,
+        },
+        recentActivity: recentTasks.map(t => ({
+          _id: t._id,
+          taskId: t.taskId,
+          title: t.title,
+          status: t.status ? t.status.name : 'Unknown',
+          statusColor: t.status ? t.status.color : '#9ca3af',
+          priority: t.priority || 'Medium',
+          dueDate: t.dueDate,
+          userName: t.customer ? t.customer.name : 'Unassigned',
+          assignee: t.assignedTo ? t.assignedTo.fullName : 'Unassigned',
         })),
       },
     });
