@@ -21,7 +21,7 @@ exports.createTask = async (req, res) => {
       taskDate, dueDate, dueTime
     } = req.body;
     
-    const staffId = req.user._id;
+    const staffId = req.staff._id;
     const taskId = await generateTaskId();
 
     const newTask = new Task({

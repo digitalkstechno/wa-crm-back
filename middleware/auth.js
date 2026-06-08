@@ -13,7 +13,7 @@ async function authMiddleware(req, res, next) {
     if (!staffVerify) {
       return res.status(401).json({ status: "Fail", message: "Invalid token" });
     }
-    req.user = staffVerify;
+    req.staff = staffVerify;
     next();
   } catch (err) {
     res.status(401).json({ status: "Fail", message: "Invalid token" });

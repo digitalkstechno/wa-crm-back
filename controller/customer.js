@@ -1,20 +1,20 @@
-const User = require('../model/user');
-const UserGroup = require('../model/userGroup');
+const Customer = require('../model/customer');
+const CustomerGroup = require('../model/customerGroup');
 const ExcelJS = require('exceljs');
 
 
-exports.createUser = async (req, res) => {
+exports.createCustomer = async (req, res) => {
   try {
     const { name, phone, email, tags, group, notes } = req.body;
-    const user = await User.create({ name, phone, email, tags, group: group || null, notes });
-    await user.populate('group', 'name color');
-    return res.status(201).json({ status: 'Success', data: user });
+    const customer = await Customer.create({ name, phone, email, tags, group: group || null, notes });
+    await customer.populate('group', 'name color');
+    return res.status(201).json({ status: 'Success', data: customer });
   } catch (error) {
     return res.status(400).json({ status: 'Fail', message: error.message });
   }
 };
 
-exports.getAllUsers = async (req, res) => {
+exports.getAllCustomers = async (req, res) => {
   try {
     const search = req.query.search || '';
     const page = parseInt(req.query.page) || 1;
@@ -31,14 +31,14 @@ exports.getAllUsers = async (req, res) => {
         }
       : {};
 
-    const [users, total] = await Promise.all([
-      User.find(query).populate('group', 'name color').sort({ createdAt: -1 }).skip(skip).limit(limit),
-      User.countDocuments(query),
+    const [customers, total] = await Promise.all([
+      Customer.find(query).populate('group', 'name color').sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Customer.countDocuments(query),
     ]);
 
     return res.status(200).json({
       status: 'Success',
-      data: users,
+      data: customers,
       pagination: {
         totalRecords: total,
         currentPage: page,
@@ -51,26 +51,26 @@ exports.getAllUsers = async (req, res) => {
   }
 };
 
-exports.updateUser = async (req, res) => {
+exports.updateCustomer = async (req, res) => {
   try {
     const { name, phone, email, tags, group, notes } = req.body;
-    const user = await User.findByIdAndUpdate(
+    const customer = await Customer.findByIdAndUpdate(
       req.params.id,
       { name, phone, email, tags, group: group || null, notes },
       { new: true }
     ).populate('group', 'name color');
-    if (!user) throw new Error('User not found');
-    return res.status(200).json({ status: 'Success', data: user });
+    if (!customer) throw new Error('Customer not found');
+    return res.status(200).json({ status: 'Success', data: customer });
   } catch (error) {
     return res.status(400).json({ status: 'Fail', message: error.message });
   }
 };
 
-exports.deleteUser = async (req, res) => {
+exports.deleteCustomer = async (req, res) => {
   try {
-    const user = await User.findByIdAndDelete(req.params.id);
-    if (!user) throw new Error('User not found');
-    return res.status(200).json({ status: 'Success', message: 'User deleted' });
+    const customer = await Customer.findByIdAndDelete(req.params.id);
+    if (!customer) throw new Error('Customer not found');
+    return res.status(200).json({ status: 'Success', message: 'Customer deleted' });
   } catch (error) {
     return res.status(400).json({ status: 'Fail', message: error.message });
   }
@@ -81,13 +81,13 @@ exports.exportExcel = async (req, res) => {
     const { groupId } = req.query;
     const query = groupId ? { group: groupId } : {};
 
-    const [users, groups] = await Promise.all([
-      User.find(query).populate('group', 'name').sort({ createdAt: -1 }),
-      UserGroup.find().select('name'),
+    const [customers, groups] = await Promise.all([
+      Customer.find(query).populate('group', 'name').sort({ createdAt: -1 }),
+      CustomerGroup.find().select('name'),
     ]);
 
     const workbook = new ExcelJS.Workbook();
-    const worksheet = workbook.addWorksheet('Users');
+    const worksheet = workbook.addWorksheet('Customers');
 
     // Define columns
     worksheet.columns = [
@@ -113,16 +113,16 @@ exports.exportExcel = async (req, res) => {
     const groupListString = `"${groupNames.join(',')}"`;
 
     // Add data and data validation
-    users.forEach((user, index) => {
+    customers.forEach((customer, index) => {
       const rowIndex = index + 2; // 1-based index, +1 for header
       const rowData = {
-        _id: user._id.toString(),
-        name: user.name,
-        phone: user.phone,
-        email: user.email,
-        groupName: user.group ? user.group.name : '',
-        tags: (user.tags || []).join(', '),
-        notes: user.notes,
+        _id: customer._id.toString(),
+        name: customer.name,
+        phone: customer.phone,
+        email: customer.email,
+        groupName: customer.group ? customer.group.name : '',
+        tags: (customer.tags || []).join(', '),
+        notes: customer.notes,
       };
       const row = worksheet.addRow(rowData);
 
@@ -137,7 +137,7 @@ exports.exportExcel = async (req, res) => {
     });
 
     // Also add validation for some empty rows at the bottom to allow adding new entries with dropdown
-    for (let i = users.length + 2; i <= users.length + 100; i++) {
+    for (let i = customers.length + 2; i <= customers.length + 100; i++) {
         if (groupNames.length > 0) {
             worksheet.getCell(`E${i}`).dataValidation = {
                 type: 'list',
@@ -153,7 +153,7 @@ exports.exportExcel = async (req, res) => {
     );
     res.setHeader(
       'Content-Disposition',
-      'attachment; filename=' + 'users.xlsx'
+      'attachment; filename=' + 'customers.xlsx'
     );
 
     await workbook.xlsx.write(res);

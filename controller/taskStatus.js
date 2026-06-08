@@ -3,7 +3,7 @@ const TaskStatus = require('../model/taskStatus');
 exports.createStatus = async (req, res) => {
   try {
     const { name, color, order } = req.body;
-    const staffId = req.user._id;
+    const staffId = req.staff._id;
 
     const newStatus = new TaskStatus({
       name,

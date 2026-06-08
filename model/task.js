@@ -9,7 +9,7 @@ const TaskSchema = new mongoose.Schema(
     status: { type: mongoose.Schema.Types.ObjectId, ref: 'TaskStatus', required: true },
     
     // Customer Information
-    customer: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer' },
     
     // Assignment
     assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Staff', default: null },

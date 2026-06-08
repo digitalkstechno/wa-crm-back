@@ -112,7 +112,7 @@ exports.fetchStaffById = async (req, res) => {
 exports.updateMe = async (req, res) => {
   try {
     const { fullName, email, phone, currentPassword, newPassword } = req.body;
-    const staff = await STAFF.findById(req.user._id);
+    const staff = await STAFF.findById(req.staff._id);
 
     const updateData = {};
     if (fullName) updateData.fullName = fullName;
@@ -126,7 +126,7 @@ exports.updateMe = async (req, res) => {
       updateData.password = encryptData(newPassword);
     }
 
-    const updated = await STAFF.findByIdAndUpdate(req.user._id, updateData, { new: true });
+    const updated = await STAFF.findByIdAndUpdate(req.staff._id, updateData, { new: true });
     return res.status(200).json({ status: 'Success', message: 'Profile updated successfully', data: updated });
   } catch (error) {
     return res.status(400).json({ status: 'Fail', message: error.message });
@@ -137,7 +137,7 @@ exports.getCurrentStaff = async (req, res) => {
   try {
     return res.status(200).json({
       status: "Success",
-      data: req.user,
+      data: req.staff,
     });
   } catch (error) {
     return res.status(500).json({

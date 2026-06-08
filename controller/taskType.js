@@ -3,7 +3,7 @@ const TaskType = require('../model/taskType');
 exports.createType = async (req, res) => {
   try {
     const { name, color } = req.body;
-    const staffId = req.user._id;
+    const staffId = req.staff._id;
 
     const newType = new TaskType({
       name,

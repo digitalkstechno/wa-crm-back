@@ -1,15 +1,15 @@
 const cron = require('node-cron');
 const REMINDER = require('../model/reminder');
-const User = require('../model/user');
+const Customer = require('../model/customer');
 
 const BATCH_SIZE = 50;
 let isProcessing = false;
 
 /**
  * Send a WhatsApp template message to a single phone number.
- * arg1 = user name, arg2 = reminder ID, arg3 = template body
+ * arg1 = customer name, arg2 = reminder ID, arg3 = template body
  */
-const sendWhatsApp = async (phone, userName, reminderId, templateBody) => {
+const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
   const WA_API_DOMAIN = process.env.WA_API_DOMAIN || 'https://crmapi.crmbot.in';
   const WA_API_VERSION = process.env.WA_API_VERSION || 'v19.0';
   const WA_PHONE_NUMBER_ID = process.env.WA_PHONE_NUMBER_ID || '730141010176205';
@@ -44,7 +44,7 @@ const sendWhatsApp = async (phone, userName, reminderId, templateBody) => {
           parameters: [
             {
               type: "text",
-              text: userName
+              text: customerName
             },
             {
               type: "text",
@@ -87,23 +87,23 @@ const getRecipients = async (reminder) => {
 
   if (reminder.recipientType === 'new') {
     if (reminder.newPhone) {
-      recipients.push({ name: reminder.newName || 'User', phone: reminder.newPhone });
+      recipients.push({ name: reminder.newName || 'Customer', phone: reminder.newPhone });
     }
-  } else if (reminder.recipientType === 'users') {
-    // Populated users array
-    if (reminder.users && reminder.users.length > 0) {
-      for (const c of reminder.users) {
+  } else if (reminder.recipientType === 'customers') {
+    // Populated customers array
+    if (reminder.customers && reminder.customers.length > 0) {
+      for (const c of reminder.customers) {
         if (c.phone) recipients.push({ name: c.name, phone: c.phone });
       }
     }
   } else if (reminder.recipientType === 'groups') {
-    // Find all users belonging to these groups
+    // Find all customers belonging to these groups
     if (reminder.groups && reminder.groups.length > 0) {
       const groupIds = reminder.groups.map(g => g._id || g);
-      const users = await User.find({ group: { $in: groupIds } })
+      const customers = await Customer.find({ group: { $in: groupIds } })
         .select('name phone')
         .lean();
-      for (const c of users) {
+      for (const c of customers) {
         if (c.phone) recipients.push({ name: c.name, phone: c.phone });
       }
     }
@@ -182,7 +182,7 @@ const initReminderWorker = () => {
       })
         .limit(BATCH_SIZE)
         .populate('template', 'name body')
-        .populate('users', 'name phone')
+        .populate('customers', 'name phone')
         .populate('groups', '_id name');
 
       if (dueReminders.length === 0) return;

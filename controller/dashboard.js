@@ -1,18 +1,18 @@
 const REMINDER = require('../model/reminder');
-const User = require('../model/user');
+const Customer = require('../model/customer');
 const Task = require('../model/task');
 const TaskStatus = require('../model/taskStatus');
 
 exports.getDashboard = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const customerId = req.staff._id;
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
     const last30Days = new Date(now);
     last30Days.setDate(last30Days.getDate() - 29);
 
     // Get basic counts
-    const totalUsers = await User.countDocuments();
+    const totalCustomers = await Customer.countDocuments();
     const totalTasks = await Task.countDocuments();
     
     // For pending tasks, we assume any task status that doesn't sound like "Completed" or "Done" is pending.
@@ -27,7 +27,7 @@ exports.getDashboard = async (req, res) => {
     ] = await Promise.all([
       // 1. Reminder Stats
       REMINDER.aggregate([
-        { $match: { createdBy: userId } },
+        { $match: { createdBy: customerId } },
         {
           $group: {
             _id: null,
@@ -45,7 +45,7 @@ exports.getDashboard = async (req, res) => {
       REMINDER.aggregate([
         {
           $match: {
-            createdBy: userId,
+            createdBy: customerId,
             status: 'Sent',
             scheduledAt: { $gte: last30Days },
           },
@@ -109,7 +109,7 @@ exports.getDashboard = async (req, res) => {
       status: 'Success',
       data: {
         stats: {
-          totalUsers,
+          totalCustomers,
           totalTasks,
           pendingTasks: pendingTasksCount,
           activeReminders: rs.activeReminders,
@@ -133,7 +133,7 @@ exports.getDashboard = async (req, res) => {
           statusColor: t.status ? t.status.color : '#9ca3af',
           priority: t.priority || 'Medium',
           dueDate: t.dueDate,
-          userName: t.customer ? t.customer.name : 'Unassigned',
+          customerName: t.customer ? t.customer.name : 'Unassigned',
           assignee: t.assignedTo ? t.assignedTo.fullName : 'Unassigned',
         })),
       },

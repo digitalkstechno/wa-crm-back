@@ -6,15 +6,15 @@ const ReminderSchema = new mongoose.Schema(
     reminderName: { type: String, default: '' },
     recipientType: {
       type: String,
-      enum: ['new', 'users', 'groups'],
+      enum: ['new', 'customers', 'groups'],
       required: true,
     },
-    // For 'users' or 'new' if we want to link it
-    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
-    // For 'users' (multiple)
-    users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
+    // For 'customers' or 'new' if we want to link it
+    customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
+    // For 'customers' (multiple)
+    customers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Customer' }],
     // For 'groups'
-    groups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'UserGroup' }],
+    groups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CustomerGroup' }],
     // Fallback for 'new'
     newName: { type: String, default: '' },
     newPhone: { type: String, default: '' },
@@ -54,7 +54,7 @@ const ReminderSchema = new mongoose.Schema(
 
 // Production indexes for fast queries
 ReminderSchema.index({ status: 1, scheduledAt: 1 }); // Cron worker: find due reminders
-ReminderSchema.index({ createdBy: 1, status: 1 });    // API: user's reminders by status
-ReminderSchema.index({ createdBy: 1, scheduledAt: -1 }); // API: user's reminders sorted
+ReminderSchema.index({ createdBy: 1, status: 1 });    // API: customer's reminders by status
+ReminderSchema.index({ createdBy: 1, scheduledAt: -1 }); // API: customer's reminders sorted
 
 module.exports = mongoose.model('Reminder', ReminderSchema);

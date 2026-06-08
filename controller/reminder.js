@@ -12,7 +12,7 @@ exports.createReminder = async (req, res) => {
       ...rest,
       ...(template ? { template } : {}),
       ...(customMessage ? { customMessage } : {}),
-      createdBy: req.user._id,
+      createdBy: req.staff._id,
     };
 
     const reminder = await REMINDER.create(reminderData);
@@ -36,7 +36,7 @@ exports.getReminders = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
 
-    const query = { createdBy: req.user._id };
+    const query = { createdBy: req.staff._id };
 
     const filterType = req.query.filterType || 'all';
     if (filterType === 'upcoming') {
@@ -51,8 +51,8 @@ exports.getReminders = async (req, res) => {
     // Run data + count + stats in parallel (single DB roundtrip pattern)
     const [reminders, total, statsAgg] = await Promise.all([
       REMINDER.find(query)
-        .populate('user', 'name phone')
-        .populate('users', 'name phone')
+        .populate('customer', 'name phone')
+        .populate('customers', 'name phone')
         .populate('groups', 'name color')
         .populate('template', 'name body')
         .sort({ scheduledAt: filterType === 'completed' ? -1 : 1 })
@@ -62,7 +62,7 @@ exports.getReminders = async (req, res) => {
       REMINDER.countDocuments(query),
       // Single aggregation for all stats instead of 3 separate countDocuments
       REMINDER.aggregate([
-        { $match: { createdBy: req.user._id } },
+        { $match: { createdBy: req.staff._id } },
         {
           $group: {
             _id: null,
@@ -98,8 +98,8 @@ exports.getReminders = async (req, res) => {
 exports.getReminderById = async (req, res) => {
   try {
     const reminder = await REMINDER.findById(req.params.id)
-      .populate('user', 'name phone')
-      .populate('users', 'name phone')
+      .populate('customer', 'name phone')
+      .populate('customers', 'name phone')
       .populate('groups', 'name color')
       .populate('template', 'name body')
       .lean();

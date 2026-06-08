@@ -1,6 +1,6 @@
 const mongoose = require('mongoose');
 
-const UserGroupSchema = new mongoose.Schema(
+const CustomerGroupSchema = new mongoose.Schema(
   {
     name: { type: String, required: true, unique: true },
     description: { type: String, default: '' },
@@ -13,10 +13,10 @@ const UserGroupSchema = new mongoose.Schema(
   }
 );
 
-UserGroupSchema.virtual('members', {
-  ref: 'User',
+CustomerGroupSchema.virtual('members', {
+  ref: 'Customer',
   localField: '_id',
   foreignField: 'group'
 });
 
-module.exports = mongoose.model('UserGroup', UserGroupSchema);
+module.exports = mongoose.model('CustomerGroup', CustomerGroupSchema);
