@@ -6,15 +6,15 @@ const ReminderSchema = new mongoose.Schema(
     reminderName: { type: String, default: '' },
     recipientType: {
       type: String,
-      enum: ['new', 'customers', 'groups'],
+      enum: ['new', 'users', 'groups'],
       required: true,
     },
-    // For 'customers' or 'new' if we want to link it
-    customer: { type: mongoose.Schema.Types.ObjectId, ref: 'Customer', default: null },
-    // For 'customers' (multiple)
-    customers: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Customer' }],
+    // For 'users' or 'new' if we want to link it
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // For 'users' (multiple)
+    users: [{ type: mongoose.Schema.Types.ObjectId, ref: 'User' }],
     // For 'groups'
-    groups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'CustomerGroup' }],
+    groups: [{ type: mongoose.Schema.Types.ObjectId, ref: 'UserGroup' }],
     // Fallback for 'new'
     newName: { type: String, default: '' },
     newPhone: { type: String, default: '' },

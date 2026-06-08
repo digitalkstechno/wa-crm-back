@@ -1,5 +1,5 @@
 const REMINDER = require('../model/reminder');
-const Customer = require('../model/customer');
+const User = require('../model/user');
 
 exports.getDashboard = async (req, res) => {
   try {
@@ -10,12 +10,12 @@ exports.getDashboard = async (req, res) => {
     last30Days.setDate(last30Days.getDate() - 29);
 
     const [
-      totalCustomers,
+      totalUsers,
       statsAgg,
       chartAgg,
       recentReminders,
     ] = await Promise.all([
-      Customer.countDocuments(),
+      User.countDocuments(),
 
       // Stats aggregation
       REMINDER.aggregate([
@@ -58,9 +58,9 @@ exports.getDashboard = async (req, res) => {
       REMINDER.find({ createdBy: userId })
         .sort({ scheduledAt: -1 })
         .limit(5)
-        .populate('customers', 'name')
+        .populate('users', 'name')
         .populate('template', 'name')
-        .select('title status scheduledAt recipientType newName customers groups')
+        .select('title status scheduledAt recipientType newName users groups')
         .lean(),
     ]);
 
@@ -71,7 +71,7 @@ exports.getDashboard = async (req, res) => {
       status: 'Success',
       data: {
         stats: {
-          totalCustomers,
+          totalUsers,
           activeReminders: s.activeReminders,
           sentToday: s.sentToday,
           failedToday: s.failedToday,
@@ -87,9 +87,9 @@ exports.getDashboard = async (req, res) => {
           title: r.title,
           status: r.status,
           scheduledAt: r.scheduledAt,
-          customerName:
-            r.recipientType === 'customers' && r.customers?.length
-              ? r.customers[0].name
+          userName:
+            r.recipientType === 'users' && r.users?.length
+              ? r.users[0].name
               : r.newName || 'Unknown',
         })),
       },

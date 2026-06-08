@@ -51,8 +51,8 @@ exports.getReminders = async (req, res) => {
     // Run data + count + stats in parallel (single DB roundtrip pattern)
     const [reminders, total, statsAgg] = await Promise.all([
       REMINDER.find(query)
-        .populate('customer', 'name phone')
-        .populate('customers', 'name phone')
+        .populate('user', 'name phone')
+        .populate('users', 'name phone')
         .populate('groups', 'name color')
         .populate('template', 'name body')
         .sort({ scheduledAt: filterType === 'completed' ? -1 : 1 })
@@ -98,8 +98,8 @@ exports.getReminders = async (req, res) => {
 exports.getReminderById = async (req, res) => {
   try {
     const reminder = await REMINDER.findById(req.params.id)
-      .populate('customer', 'name phone')
-      .populate('customers', 'name phone')
+      .populate('user', 'name phone')
+      .populate('users', 'name phone')
       .populate('groups', 'name color')
       .populate('template', 'name body')
       .lean();
