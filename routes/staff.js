@@ -10,12 +10,14 @@ let {
   staffDelete,
   getCurrentStaff,
   updateMe,
+  fetchHierarchy,
 } = require("../controller/staff");
 
 router.post("/login", loginStaff);
 router.post("/create", authMiddleware, createStaff);
 router.get("/me", authMiddleware, getCurrentStaff);
 router.put("/me", authMiddleware, updateMe);
+router.get("/hierarchy", authMiddleware, fetchHierarchy);
 router.get("/", authMiddleware, fetchAllStaffs);
 router.get("/:id", authMiddleware, fetchStaffById);
 router.put("/:id", authMiddleware, staffUpdate);
