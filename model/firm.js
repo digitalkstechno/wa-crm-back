@@ -21,6 +21,10 @@ let FirmSchema = new Schema(
       type: String,
       enum: ['Active', 'Inactive'],
       default: 'Active',
+    },
+    logo: {
+      type: String,
+      default: null
     }
   },
   { timestamps: true }

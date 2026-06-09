@@ -54,3 +54,20 @@ exports.firmDelete = async (req, res) => {
     return res.status(404).json({ status: "Fail", message: error.message });
   }
 };
+
+exports.uploadLogo = async (req, res) => {
+  try {
+    if (!req.file) {
+      throw new Error("No image file provided");
+    }
+    const logoUrl = `/uploads/${req.file.filename}`;
+    const updatedFirm = await FIRM.findByIdAndUpdate(
+      req.params.id,
+      { logo: logoUrl },
+      { new: true }
+    );
+    return res.status(200).json({ status: "Success", message: "Logo uploaded successfully", data: updatedFirm });
+  } catch (error) {
+    return res.status(400).json({ status: "Fail", message: error.message });
+  }
+};
