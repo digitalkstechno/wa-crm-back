@@ -2,8 +2,8 @@ const FIRM = require("../model/firm");
 
 exports.createFirm = async (req, res) => {
   try {
-    const { name, code, status } = req.body;
-    const firmDetails = await FIRM.create({ name, code, status });
+    const { name, code, status, superAdminId } = req.body;
+    const firmDetails = await FIRM.create({ name, code, status, superAdminId: superAdminId || null });
     return res.status(201).json({ status: "Success", message: "Firm created successfully", data: firmDetails });
   } catch (error) {
     return res.status(400).json({ status: "Fail", message: error.message });
@@ -32,11 +32,12 @@ exports.fetchFirmById = async (req, res) => {
 exports.firmUpdate = async (req, res) => {
   try {
     const firmId = req.params.id;
-    const { name, code, status } = req.body;
+    const { name, code, status, superAdminId } = req.body;
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (code !== undefined) updateData.code = code;
     if (status !== undefined) updateData.status = status;
+    if (superAdminId !== undefined) updateData.superAdminId = superAdminId || null;
 
     const updatedFirm = await FIRM.findByIdAndUpdate(firmId, updateData, { new: true });
     return res.status(200).json({ status: "Success", message: "Firm updated successfully", data: updatedFirm });

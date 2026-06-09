@@ -12,6 +12,11 @@ let FirmSchema = new Schema(
       type: String,
       unique: true,
     },
+    superAdminId: {
+      type: Schema.Types.ObjectId,
+      ref: 'Staff',
+      default: null,
+    },
     status: {
       type: String,
       enum: ['Active', 'Inactive'],

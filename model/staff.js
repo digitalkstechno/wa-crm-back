@@ -28,7 +28,7 @@ let StaffSchema = new Schema(
     },
     roleType: {
       type: String,
-      enum: ['Admin', 'Manager', 'Member'],
+      enum: ['Super Admin', 'Admin', 'Manager', 'Member'],
       default: 'Member',
     },
     parentId: {
