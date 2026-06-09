@@ -2,7 +2,24 @@ const TEAM = require("../model/team");
 
 exports.createTeam = async (req, res) => {
   try {
-    const { teamName, teamCode, firmId, managerId, teamLeadId, description, status, target } = req.body;
+    const { teamName, firmId, managerId, teamLeadId, description, status, target } = req.body;
+    let teamCode = req.body.teamCode;
+
+    if (!teamCode) {
+      const baseCode = teamName ? teamName.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, '') : 'TEM';
+      const safeBase = baseCode || 'TEM';
+      let uniqueCode = safeBase + Math.floor(1000 + Math.random() * 9000);
+      let isUnique = false;
+      while (!isUnique) {
+        const existing = await TEAM.findOne({ teamCode: uniqueCode });
+        if (!existing) {
+          isUnique = true;
+        } else {
+          uniqueCode = safeBase + Math.floor(1000 + Math.random() * 9000);
+        }
+      }
+      teamCode = uniqueCode;
+    }
 
     const teamDetails = await TEAM.create({
       teamName,

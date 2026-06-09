@@ -2,7 +2,25 @@ const FIRM = require("../model/firm");
 
 exports.createFirm = async (req, res) => {
   try {
-    const { name, code, status, superAdminId } = req.body;
+    const { name, status, superAdminId } = req.body;
+    let code = req.body.code;
+
+    if (!code) {
+      const baseCode = name ? name.substring(0, 3).toUpperCase().replace(/[^A-Z]/g, '') : 'FRM';
+      const safeBase = baseCode || 'FRM';
+      let uniqueCode = safeBase + Math.floor(1000 + Math.random() * 9000);
+      let isUnique = false;
+      while (!isUnique) {
+        const existing = await FIRM.findOne({ code: uniqueCode });
+        if (!existing) {
+          isUnique = true;
+        } else {
+          uniqueCode = safeBase + Math.floor(1000 + Math.random() * 9000);
+        }
+      }
+      code = uniqueCode;
+    }
+
     const firmDetails = await FIRM.create({ name, code, status, superAdminId: superAdminId || null });
     return res.status(201).json({ status: "Success", message: "Firm created successfully", data: firmDetails });
   } catch (error) {
