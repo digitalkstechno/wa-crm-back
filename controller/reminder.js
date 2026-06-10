@@ -1,19 +1,20 @@
 const REMINDER = require("../model/reminder");
+const { getScopeQuery, assignScopeFields } = require("../utils/scope");
 
 exports.createReminder = async (req, res) => {
   try {
-    const { template, customMessage, ...rest } = req.body;
+    const { template, customMessage, assignedTo, ...rest } = req.body;
 
     if (!template && !customMessage?.trim()) {
       return res.status(400).json({ status: 'Fail', message: 'Either a template or a custom message is required.' });
     }
 
-    const reminderData = {
+    const reminderData = assignScopeFields(req, {
       ...rest,
       ...(template ? { template } : {}),
       ...(customMessage ? { customMessage } : {}),
-      createdBy: req.staff._id,
-    };
+      assignedTo: assignedTo || null,
+    });
 
     const reminder = await REMINDER.create(reminderData);
 
@@ -36,12 +37,13 @@ exports.getReminders = async (req, res) => {
     const limit = parseInt(req.query.limit) || 20;
     const skip = (page - 1) * limit;
 
-    const query = { createdBy: req.staff._id };
+    const scope = await getScopeQuery(req, 'Reminder');
+    const query = { ...scope };
 
     const filterType = req.query.filterType || 'all';
     if (filterType === 'upcoming') {
       query.status = { $in: ['Scheduled', 'Pending'] };
-       query.scheduledAt = { $gte: new Date() };
+      query.scheduledAt = { $gte: new Date() };
     } else if (filterType === 'completed') {
       query.status = 'Sent';
     } else if (filterType === 'failed') {
@@ -55,14 +57,15 @@ exports.getReminders = async (req, res) => {
         .populate('customers', 'name phone')
         .populate('groups', 'name color')
         .populate('template', 'name body')
+        .populate('assignedTo', 'fullName email')
         .sort({ scheduledAt: filterType === 'completed' ? -1 : 1 })
         .skip(skip)
         .limit(limit)
         .lean(),
       REMINDER.countDocuments(query),
-      // Single aggregation for all stats instead of 3 separate countDocuments
+      // Single aggregation for all stats
       REMINDER.aggregate([
-        { $match: { createdBy: req.staff._id } },
+        { $match: scope },
         {
           $group: {
             _id: null,
@@ -97,11 +100,13 @@ exports.getReminders = async (req, res) => {
 
 exports.getReminderById = async (req, res) => {
   try {
-    const reminder = await REMINDER.findById(req.params.id)
+    const scope = await getScopeQuery(req, 'Reminder');
+    const reminder = await REMINDER.findOne({ _id: req.params.id, ...scope })
       .populate('customer', 'name phone')
       .populate('customers', 'name phone')
       .populate('groups', 'name color')
       .populate('template', 'name body')
+      .populate('assignedTo', 'fullName email')
       .lean();
 
     if (!reminder) throw new Error("Reminder not found");
@@ -120,7 +125,8 @@ exports.getReminderById = async (req, res) => {
 
 exports.updateReminder = async (req, res) => {
   try {
-    const reminder = await REMINDER.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const scope = await getScopeQuery(req, 'Reminder');
+    const reminder = await REMINDER.findOneAndUpdate({ _id: req.params.id, ...scope }, req.body, { new: true, runValidators: true });
     if (!reminder) throw new Error("Reminder not found");
 
     return res.status(200).json({
@@ -138,7 +144,8 @@ exports.updateReminder = async (req, res) => {
 
 exports.deleteReminder = async (req, res) => {
   try {
-    const reminder = await REMINDER.findByIdAndDelete(req.params.id);
+    const scope = await getScopeQuery(req, 'Reminder');
+    const reminder = await REMINDER.findOneAndDelete({ _id: req.params.id, ...scope });
     if (!reminder) throw new Error("Reminder not found");
 
     return res.status(200).json({

@@ -48,6 +48,8 @@ const ReminderSchema = new mongoose.Schema(
       afterCount: { type: Number },
     },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Staff', required: true },
+    firmId: { type: mongoose.Schema.Types.ObjectId, ref: 'Firm', default: null },
+    assignedTo: { type: mongoose.Schema.Types.ObjectId, ref: 'Staff', default: null },
   },
   { timestamps: true }
 );

@@ -1,8 +1,9 @@
 const TEAM = require("../model/team");
+const { getScopeQuery, assignScopeFields } = require("../utils/scope");
 
 exports.createTeam = async (req, res) => {
   try {
-    const { teamName, firmId, managerId, teamLeadId, description, status, target } = req.body;
+    const { teamName, managerId, teamLeadId, description, status, target } = req.body;
     let teamCode = req.body.teamCode;
 
     if (!teamCode) {
@@ -21,16 +22,17 @@ exports.createTeam = async (req, res) => {
       teamCode = uniqueCode;
     }
 
-    const teamDetails = await TEAM.create({
+    const teamData = assignScopeFields(req, {
       teamName,
       teamCode,
-      firmId: firmId || null,
       managerId: managerId || null,
       teamLeadId: teamLeadId || null,
       description,
       status,
       target
     });
+
+    const teamDetails = await TEAM.create(teamData);
 
     return res.status(201).json({
       status: "Success",
@@ -51,7 +53,8 @@ exports.fetchAllTeams = async (req, res) => {
     const limit = parseInt(req.query.limit) || 100;
     const skip = (page - 1) * limit;
 
-    const query = {};
+    const scope = await getScopeQuery(req, 'Team');
+    const query = { ...scope };
 
     const totalTeams = await TEAM.countDocuments(query);
     const teamsData = await TEAM.find(query)
@@ -80,7 +83,8 @@ exports.fetchAllTeams = async (req, res) => {
 
 exports.fetchTeamById = async (req, res) => {
   try {
-    const teamData = await TEAM.findById(req.params.id);
+    const scope = await getScopeQuery(req, 'Team');
+    const teamData = await TEAM.findOne({ _id: req.params.id, ...scope });
     if (!teamData) throw new Error("Team not found");
     return res.status(200).json({
       status: "Success",
@@ -98,22 +102,22 @@ exports.fetchTeamById = async (req, res) => {
 exports.teamUpdate = async (req, res) => {
   try {
     const teamId = req.params.id;
-    const oldTeam = await TEAM.findById(teamId);
+    const scope = await getScopeQuery(req, 'Team');
+    const oldTeam = await TEAM.findOne({ _id: teamId, ...scope });
     if (!oldTeam) throw new Error("Team not found");
 
-    const { teamName, teamCode, firmId, managerId, teamLeadId, description, status, target } = req.body;
+    const { teamName, teamCode, managerId, teamLeadId, description, status, target } = req.body;
     
     const updateData = {};
     if (teamName !== undefined) updateData.teamName = teamName;
     if (teamCode !== undefined) updateData.teamCode = teamCode;
-    if (firmId !== undefined) updateData.firmId = firmId || null;
     if (managerId !== undefined) updateData.managerId = managerId || null;
     if (teamLeadId !== undefined) updateData.teamLeadId = teamLeadId || null;
     if (description !== undefined) updateData.description = description;
     if (status !== undefined) updateData.status = status;
     if (target !== undefined) updateData.target = target;
 
-    const updatedTeam = await TEAM.findByIdAndUpdate(teamId, updateData, { new: true });
+    const updatedTeam = await TEAM.findOneAndUpdate({ _id: teamId, ...scope }, updateData, { new: true });
     return res.status(200).json({
       status: "Success",
       message: "Team updated successfully",
@@ -129,9 +133,10 @@ exports.teamUpdate = async (req, res) => {
 
 exports.teamDelete = async (req, res) => {
   try {
-    const oldTeam = await TEAM.findById(req.params.id);
+    const scope = await getScopeQuery(req, 'Team');
+    const oldTeam = await TEAM.findOne({ _id: req.params.id, ...scope });
     if (!oldTeam) throw new Error("Team not found");
-    await TEAM.findByIdAndDelete(req.params.id);
+    await TEAM.findOneAndDelete({ _id: req.params.id, ...scope });
     return res.status(200).json({
       status: "Success",
       message: "Team deleted successfully",

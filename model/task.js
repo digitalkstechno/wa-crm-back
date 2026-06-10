@@ -26,6 +26,7 @@ const TaskSchema = new mongoose.Schema(
     dueTime: { type: String, default: '' },
     
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Staff', required: true },
+    firmId: { type: mongoose.Schema.Types.ObjectId, ref: 'Firm', default: null },
   },
   { timestamps: true }
 );

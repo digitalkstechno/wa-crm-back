@@ -1,10 +1,12 @@
 const CustomerGroup = require('../model/customerGroup');
 const Customer = require('../model/customer');
+const { getScopeQuery, assignScopeFields } = require('../utils/scope');
 
 exports.createGroup = async (req, res) => {
   try {
     const { name, description, color } = req.body;
-    const group = await CustomerGroup.create({ name, description, color });
+    const groupData = assignScopeFields(req, { name, description, color });
+    const group = await CustomerGroup.create(groupData);
     return res.status(201).json({ status: 'Success', data: group });
   } catch (error) {
     return res.status(400).json({ status: 'Fail', message: error.message });
@@ -18,7 +20,13 @@ exports.getAllGroups = async (req, res) => {
     const limit = parseInt(req.query.limit) || 9;
     const skip = (page - 1) * limit;
 
-    const query = search ? { name: { $regex: search, $options: 'i' } } : {};
+    const scope = await getScopeQuery(req, 'CustomerGroup');
+    const customerScope = await getScopeQuery(req, 'Customer');
+
+    const query = {
+      ...scope,
+      ...(search ? { name: { $regex: search, $options: 'i' } } : {})
+    };
 
     const [groups, total] = await Promise.all([
       CustomerGroup.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -27,7 +35,7 @@ exports.getAllGroups = async (req, res) => {
 
     const groupsWithCount = await Promise.all(
       groups.map(async (g) => {
-        const count = await Customer.countDocuments({ group: g._id });
+        const count = await Customer.countDocuments({ group: g._id, ...customerScope });
         return { ...g.toObject(), count };
       })
     );
@@ -50,8 +58,9 @@ exports.getAllGroups = async (req, res) => {
 exports.updateGroup = async (req, res) => {
   try {
     const { name, description, color } = req.body;
-    const group = await CustomerGroup.findByIdAndUpdate(
-      req.params.id,
+    const scope = await getScopeQuery(req, 'CustomerGroup');
+    const group = await CustomerGroup.findOneAndUpdate(
+      { _id: req.params.id, ...scope },
       { name, description, color },
       { new: true }
     );
@@ -64,9 +73,11 @@ exports.updateGroup = async (req, res) => {
 
 exports.deleteGroup = async (req, res) => {
   try {
-    const group = await CustomerGroup.findByIdAndDelete(req.params.id);
+    const scope = await getScopeQuery(req, 'CustomerGroup');
+    const customerScope = await getScopeQuery(req, 'Customer');
+    const group = await CustomerGroup.findOneAndDelete({ _id: req.params.id, ...scope });
     if (!group) throw new Error('Group not found');
-    await Customer.updateMany({ group: req.params.id }, { group: null });
+    await Customer.updateMany({ group: req.params.id, ...customerScope }, { group: null });
     return res.status(200).json({ status: 'Success', message: 'Group deleted' });
   } catch (error) {
     return res.status(400).json({ status: 'Fail', message: error.message });
@@ -75,8 +86,11 @@ exports.deleteGroup = async (req, res) => {
 
 exports.fetchAllGroups = async (req, res) => {
   try {
-    const groups = await CustomerGroup.find().populate({
+    const scope = await getScopeQuery(req, 'CustomerGroup');
+    const customerScope = await getScopeQuery(req, 'Customer');
+    const groups = await CustomerGroup.find(scope).populate({
       path: 'members',
+      match: customerScope,
       select: 'name phone _id', // Changed fullName to name
     });
     

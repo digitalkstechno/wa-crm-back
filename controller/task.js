@@ -1,4 +1,5 @@
 const Task = require('../model/task');
+const { getScopeQuery, assignScopeFields } = require('../utils/scope');
 
 // Helper to generate next Task ID
 const generateTaskId = async () => {
@@ -21,10 +22,9 @@ exports.createTask = async (req, res) => {
       taskDate, dueDate, dueTime
     } = req.body;
     
-    const staffId = req.staff._id;
     const taskId = await generateTaskId();
 
-    const newTask = new Task({
+    const taskData = assignScopeFields(req, {
       taskId,
       title,
       description,
@@ -37,9 +37,9 @@ exports.createTask = async (req, res) => {
       taskDate,
       dueDate,
       dueTime,
-      createdBy: staffId,
     });
-    
+
+    const newTask = new Task(taskData);
     await newTask.save();
     await newTask.populate(['status', 'assignedTo', 'assignedRM', 'type', 'customer']);
 
@@ -51,7 +51,8 @@ exports.createTask = async (req, res) => {
 
 exports.getTasks = async (req, res) => {
   try {
-    const tasks = await Task.find()
+    const scope = await getScopeQuery(req, 'Task');
+    const tasks = await Task.find(scope)
       .populate('status')
       .populate('type')
       .populate('customer', 'name phone email')
@@ -83,8 +84,9 @@ exports.updateTask = async (req, res) => {
       taskDate, dueDate, dueTime
     };
     
-    const task = await Task.findByIdAndUpdate(
-      id,
+    const scope = await getScopeQuery(req, 'Task');
+    const task = await Task.findOneAndUpdate(
+      { _id: id, ...scope },
       updateFields,
       { new: true }
     ).populate(['status', 'assignedTo', 'assignedRM', 'type', 'customer']);
@@ -99,7 +101,8 @@ exports.updateTask = async (req, res) => {
 exports.deleteTask = async (req, res) => {
   try {
     const { id } = req.params;
-    const task = await Task.findByIdAndDelete(id);
+    const scope = await getScopeQuery(req, 'Task');
+    const task = await Task.findOneAndDelete({ _id: id, ...scope });
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });
     res.status(200).json({ success: true, message: 'Task deleted' });
   } catch (error) {
@@ -112,7 +115,8 @@ exports.updateTaskStatus = async (req, res) => {
     const { id } = req.params;
     const { statusId } = req.body;
 
-    const task = await Task.findByIdAndUpdate(id, { status: statusId }, { new: true })
+    const scope = await getScopeQuery(req, 'Task');
+    const task = await Task.findOneAndUpdate({ _id: id, ...scope }, { status: statusId }, { new: true })
       .populate(['status', 'assignedTo', 'assignedRM', 'type', 'customer']);
     
     if (!task) return res.status(404).json({ success: false, message: 'Task not found' });

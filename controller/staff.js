@@ -1,6 +1,7 @@
 const STAFF = require("../model/staff");
 const { encryptData, decryptData } = require("../utils/crypto");
 const jwt = require("jsonwebtoken");
+const { getStaffScopeQuery, assignScopeFields } = require("../utils/scope");
 
 exports.createStaff = async (req, res) => {
   try {
@@ -10,13 +11,12 @@ exports.createStaff = async (req, res) => {
       employeeCode, profileImage, permissions 
     } = req.body;
 
-    const staffDetails = await STAFF.create({
+    const staffData = assignScopeFields(req, {
       fullName,
       email,
       phone,
       password: encryptData(password),
       roleType,
-      firmId: firmId || null,
       parentId: parentId || null,
       managerId: managerId || null,
       teamId: teamId || null,
@@ -29,6 +29,12 @@ exports.createStaff = async (req, res) => {
       profileImage,
       permissions
     });
+
+    if (req.staff.roleType === 'Super Admin' && firmId) {
+      staffData.firmId = firmId;
+    }
+
+    const staffDetails = await STAFF.create(staffData);
 
     return res.status(201).json({
       status: "Success",
@@ -76,12 +82,19 @@ exports.fetchAllStaffs = async (req, res) => {
     const skip = (page - 1) * limit;
     const search = req.query.search || "";
 
+    const scope = await getStaffScopeQuery(req);
+
     const query = {
-      $or: [
-        { fullName: { $regex: search, $options: "i" } },
-        { email: { $regex: search, $options: "i" } },
-        { phone: { $regex: search, $options: "i" } },
-      ],
+      ...scope,
+      ...(search
+        ? {
+            $or: [
+              { fullName: { $regex: search, $options: "i" } },
+              { email: { $regex: search, $options: "i" } },
+              { phone: { $regex: search, $options: "i" } },
+            ],
+          }
+        : {})
     };
 
     const totalStaff = await STAFF.countDocuments(query);
@@ -111,7 +124,8 @@ exports.fetchAllStaffs = async (req, res) => {
 
 exports.fetchStaffById = async (req, res) => {
   try {
-    const staffData = await STAFF.findById(req.params.id);
+    const scope = await getStaffScopeQuery(req);
+    const staffData = await STAFF.findOne({ _id: req.params.id, ...scope });
     if (!staffData) throw new Error("Staff not found");
     return res.status(200).json({
       status: "Success",
@@ -167,7 +181,8 @@ exports.getCurrentStaff = async (req, res) => {
 exports.staffUpdate = async (req, res) => {
   try {
     const staffId = req.params.id;
-    const oldStaff = await STAFF.findById(staffId);
+    const scope = await getStaffScopeQuery(req);
+    const oldStaff = await STAFF.findOne({ _id: staffId, ...scope });
     if (!oldStaff) throw new Error("Staff not found");
 
     const { 
@@ -196,7 +211,7 @@ exports.staffUpdate = async (req, res) => {
     if (profileImage !== undefined) updateData.profileImage = profileImage;
     if (permissions !== undefined) updateData.permissions = permissions;
 
-    const updatedStaff = await STAFF.findByIdAndUpdate(staffId, updateData, { new: true });
+    const updatedStaff = await STAFF.findOneAndUpdate({ _id: staffId, ...scope }, updateData, { new: true });
     return res.status(200).json({
       status: "Success",
       message: "Staff updated successfully",
@@ -212,9 +227,10 @@ exports.staffUpdate = async (req, res) => {
 
 exports.staffDelete = async (req, res) => {
   try {
-    const oldStaff = await STAFF.findById(req.params.id);
+    const scope = await getStaffScopeQuery(req);
+    const oldStaff = await STAFF.findOne({ _id: req.params.id, ...scope });
     if (!oldStaff) throw new Error("Staff not found");
-    await STAFF.findByIdAndDelete(req.params.id);
+    await STAFF.findOneAndDelete({ _id: req.params.id, ...scope });
     return res.status(200).json({
       status: "Success",
       message: "Staff deleted successfully",
@@ -229,7 +245,8 @@ exports.staffDelete = async (req, res) => {
 
 exports.fetchHierarchy = async (req, res) => {
   try {
-    const staffsData = await STAFF.find().select('-password').sort({ createdAt: -1 });
+    const scope = await getStaffScopeQuery(req);
+    const staffsData = await STAFF.find(scope).select('-password').sort({ createdAt: -1 });
     return res.status(200).json({
       status: "Success",
       message: "Staff hierarchy fetched successfully",
