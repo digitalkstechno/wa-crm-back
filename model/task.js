@@ -20,6 +20,12 @@ const TaskSchema = new mongoose.Schema(
       default: 'Medium'
     },
     
+    // Reminders
+    sendCustomerReminder: { type: Boolean, default: false },
+    customerTemplate: { type: mongoose.Schema.Types.ObjectId, ref: 'Template', default: null },
+    sendStaffReminder: { type: Boolean, default: false },
+    staffTemplate: { type: mongoose.Schema.Types.ObjectId, ref: 'Template', default: null },
+    
     // Date & Time
     taskDate: { type: Date, required: true },
     dueDate: { type: Date, required: true },

@@ -262,4 +262,4 @@ const initReminderWorker = () => {
   console.log('[Worker] Reminder cron initialized');
 };
 
-module.exports = { initReminderWorker };
+module.exports = { initReminderWorker, sendWhatsApp };
