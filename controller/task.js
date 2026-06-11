@@ -14,7 +14,7 @@ const handleImmediateReminders = async (task) => {
       const customer = await Customer.findById(task.customer);
       if (template && customer && customer.phone) {
         console.log(`[Task Reminder] Sending WhatsApp to Customer: ${customer.name} (${customer.phone})`);
-        await sendWhatsApp(customer.phone, customer.name, task._id, template.body);
+        await sendWhatsApp(customer.phone, customer.name, task._id, template.body, task.firmId);
       }
     }
 
@@ -24,7 +24,7 @@ const handleImmediateReminders = async (task) => {
       const staff = await Staff.findById(task.assignedTo);
       if (template && staff && staff.phone) {
         console.log(`[Task Reminder] Sending WhatsApp to Staff: ${staff.fullName} (${staff.phone})`);
-        await sendWhatsApp(staff.phone, staff.fullName, task._id, template.body);
+        await sendWhatsApp(staff.phone, staff.fullName, task._id, template.body, task.firmId);
       }
     }
   } catch (error) {

@@ -9,16 +9,78 @@ let isProcessing = false;
  * Send a WhatsApp template message to a single phone number.
  * arg1 = customer name, arg2 = reminder ID, arg3 = template body
  */
-const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
-  const WA_API_DOMAIN = process.env.WA_API_DOMAIN || 'https://crmapi.crmbot.in';
-  const WA_API_VERSION = process.env.WA_API_VERSION || 'v19.0';
-  const WA_PHONE_NUMBER_ID = process.env.WA_PHONE_NUMBER_ID || '730141010176205';
-  const WA_ACCESS_TOKEN = process.env.WA_ACCESS_TOKEN;
-  const WA_TEMPLATE_ID = process.env.WA_TEMPLATE_ID || 'order_data';
-  const WA_TEMPLATE_LANG = process.env.WA_TEMPLATE_LANG || 'en';
+const sendWhatsApp = async (phone, customerName, reminderId, templateBody, firmId = null) => {
+  let resolvedFirmId = firmId;
+  if (!resolvedFirmId && reminderId) {
+    try {
+      const Reminder = require('../model/reminder');
+      const Task = require('../model/task');
+      const reminder = await Reminder.findById(reminderId).select('firmId').lean();
+      if (reminder && reminder.firmId) {
+        resolvedFirmId = reminder.firmId;
+      } else {
+        const task = await Task.findById(reminderId).select('firmId').lean();
+        if (task && task.firmId) {
+          resolvedFirmId = task.firmId;
+        }
+      }
+    } catch (err) {
+      console.error('[sendWhatsApp] Error resolving firmId:', err.message);
+    }
+  }
+
+  let firmDoc = null;
+  if (resolvedFirmId) {
+    try {
+      const FIRM = require('../model/firm');
+      firmDoc = await FIRM.findById(resolvedFirmId).lean();
+    } catch (err) {
+      console.error('[sendWhatsApp] Error fetching firm:', err.message);
+    }
+  }
+
+  // Load context models for placeholders
+  let customer = null;
+  let task = null;
+  let staff = null;
+  let reminderDoc = null;
+  if (reminderId) {
+    try {
+      const Reminder = require('../model/reminder');
+      const Task = require('../model/task');
+      const Customer = require('../model/customer');
+      const Staff = require('../model/staff');
+
+      const reminder = await Reminder.findById(reminderId).populate('assignedTo').lean();
+      if (reminder) {
+        reminderDoc = reminder;
+        staff = reminder.assignedTo;
+        if (reminder.customer) {
+          customer = await Customer.findById(reminder.customer).lean();
+        }
+      } else {
+        task = await Task.findById(reminderId).populate('assignedTo').lean();
+        if (task) {
+          staff = task.assignedTo;
+          if (task.customer) {
+            customer = await Customer.findById(task.customer).lean();
+          }
+        }
+      }
+    } catch (err) {
+      console.error('[sendWhatsApp] Error fetching template context:', err.message);
+    }
+  }
+
+  const WA_API_DOMAIN = (firmDoc && firmDoc.waApiDomain) || process.env.WA_API_DOMAIN || 'https://crmapi.crmbot.in';
+  const WA_API_VERSION = (firmDoc && firmDoc.waApiVersion) || process.env.WA_API_VERSION || 'v19.0';
+  const WA_PHONE_NUMBER_ID = (firmDoc && firmDoc.waPhoneNumberId) || process.env.WA_PHONE_NUMBER_ID || '730141010176205';
+  const WA_ACCESS_TOKEN = (firmDoc && firmDoc.waAccessToken) || process.env.WA_ACCESS_TOKEN;
+  const WA_TEMPLATE_ID = (firmDoc && firmDoc.waTemplateId) || process.env.WA_TEMPLATE_ID || 'order_data';
+  const WA_TEMPLATE_LANG = (firmDoc && firmDoc.waTemplateLang) || process.env.WA_TEMPLATE_LANG || 'en';
 
   if (!WA_ACCESS_TOKEN) {
-    throw new Error('WA_ACCESS_TOKEN is missing in environment variables');
+    throw new Error('WA_ACCESS_TOKEN is missing in both firm settings and environment variables');
   }
 
   const cleanPhone = phone.replace(/[^0-9]/g, '');
@@ -27,37 +89,94 @@ const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
 
   const url = `${WA_API_DOMAIN}/api/meta/${WA_API_VERSION}/${WA_PHONE_NUMBER_ID}/messages`;
 
-  const payload = {
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
-    to: senderPhone,
-    type: "template",
-    template: {
+  // Parse custom template object or default
+  let templateObj = null;
+  if (firmDoc && firmDoc.waTemplateJson) {
+    try {
+      templateObj = typeof firmDoc.waTemplateJson === 'string' ? JSON.parse(firmDoc.waTemplateJson) : firmDoc.waTemplateJson;
+    } catch (err) {
+      console.error('[sendWhatsApp] Error parsing firm.waTemplateJson:', err.message);
+    }
+  }
+
+  if (!templateObj) {
+    templateObj = {
+      name: WA_TEMPLATE_ID,
       language: {
         policy: "deterministic",
         code: WA_TEMPLATE_LANG
       },
-      name: WA_TEMPLATE_ID,
       components: [
         {
           type: "body",
           parameters: [
             {
               type: "text",
-              text: customerName
+              text: "{customerName}"
             },
             {
               type: "text",
-              text: Math.random().toString().slice(2,8)
+              text: "{randomCode}"
             },
             {
               type: "text",
-              text: templateBody
+              text: "{templateBody}"
             }
           ]
         }
       ]
-    }
+    };
+  }
+
+  // First, resolve the message templateBody itself (e.g. from user template editor text)
+  const { resolveTemplateBody } = require('../utils/templateResolver');
+  const resolvedTemplateBody = resolveTemplateBody(templateBody, {
+    customer,
+    firm: firmDoc,
+    task,
+    staff,
+    reminder: reminderDoc,
+    fallbackCustomerName: customerName,
+    fallbackCustomerPhone: phone
+  });
+
+  // Now, stringify templateObj and resolve all placeholders inside it (e.g. {customerName}, {randomCode}, {templateBody})
+  let templateStr = JSON.stringify(templateObj);
+  const randomCode = Math.random().toString().slice(2, 8);
+  const replacements = {
+    '{customerName}': (customer && customer.name) || customerName || 'Customer',
+    '{customerEmail}': (customer && customer.email) || '',
+    '{customerPhone}': (customer && customer.phone) || phone || '',
+    '{firmName}': (firmDoc && firmDoc.name) || '',
+    '{taskId}': (task && task.taskId) || '',
+    '{taskTitle}': (task && task.title) || '',
+    '{taskDueDate}': (task && task.dueDate ? new Date(task.dueDate).toLocaleDateString('en-GB') : ''),
+    '{taskDueTime}': (task && task.dueTime) || '',
+    '{taskDescription}': (task && task.description) || '',
+    '{reminderTitle}': (reminderDoc && reminderDoc.title) || '',
+    '{reminderName}': (reminderDoc && reminderDoc.reminderName) || '',
+    '{reminderScheduledAt}': (reminderDoc && reminderDoc.scheduledAt ? new Date(reminderDoc.scheduledAt).toLocaleString('en-GB') : ''),
+    '{reminderCustomMessage}': (reminderDoc && reminderDoc.customMessage) || '',
+    '{staffName}': (staff && staff.fullName) || '',
+    '{staffPhone}': (staff && staff.phone) || '',
+    '{staffEmail}': (staff && staff.email) || '',
+    '{randomCode}': randomCode,
+    '{templateBody}': resolvedTemplateBody
+  };
+
+  for (const [key, value] of Object.entries(replacements)) {
+    templateStr = templateStr.split(key).join(String(value !== undefined && value !== null ? value : ''));
+  }
+
+  // Parse back to object
+  const resolvedTemplateObj = JSON.parse(templateStr);
+
+  const payload = {
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: senderPhone,
+    type: "template",
+    template: resolvedTemplateObj
   };
 
   const res = await fetch(url, {
@@ -211,7 +330,7 @@ const initReminderWorker = () => {
           let allSent = true;
           for (const { name, phone } of recipients) {
             try {
-              await sendWhatsApp(phone, name, reminder._id, templateBody);
+              await sendWhatsApp(phone, name, reminder._id, templateBody, reminder.firmId);
               console.log(`[Worker] Sent to ${phone} (${name})`);
             } catch (err) {
               console.error(`[Worker] Failed sending to ${phone}:`, err.message);

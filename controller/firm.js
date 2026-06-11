@@ -2,7 +2,7 @@ const FIRM = require("../model/firm");
 
 exports.createFirm = async (req, res) => {
   try {
-    const { name, status, superAdminId } = req.body;
+    const { name, status, superAdminId, waApiDomain, waApiVersion, waPhoneNumberId, waAccessToken, waTemplateId, waTemplateLang, waTemplateJson } = req.body;
     let code = req.body.code;
 
     if (!code) {
@@ -21,7 +21,19 @@ exports.createFirm = async (req, res) => {
       code = uniqueCode;
     }
 
-    const firmDetails = await FIRM.create({ name, code, status, superAdminId: superAdminId || null });
+    const firmDetails = await FIRM.create({
+      name,
+      code,
+      status,
+      superAdminId: superAdminId || null,
+      waApiDomain: waApiDomain || null,
+      waApiVersion: waApiVersion || null,
+      waPhoneNumberId: waPhoneNumberId || null,
+      waAccessToken: waAccessToken || null,
+      waTemplateId: waTemplateId || null,
+      waTemplateLang: waTemplateLang || null,
+      waTemplateJson: waTemplateJson || null
+    });
     return res.status(201).json({ status: "Success", message: "Firm created successfully", data: firmDetails });
   } catch (error) {
     return res.status(400).json({ status: "Fail", message: error.message });
@@ -50,12 +62,19 @@ exports.fetchFirmById = async (req, res) => {
 exports.firmUpdate = async (req, res) => {
   try {
     const firmId = req.params.id;
-    const { name, code, status, superAdminId } = req.body;
+    const { name, code, status, superAdminId, waApiDomain, waApiVersion, waPhoneNumberId, waAccessToken, waTemplateId, waTemplateLang, waTemplateJson } = req.body;
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (code !== undefined) updateData.code = code;
     if (status !== undefined) updateData.status = status;
     if (superAdminId !== undefined) updateData.superAdminId = superAdminId || null;
+    if (waApiDomain !== undefined) updateData.waApiDomain = waApiDomain || null;
+    if (waApiVersion !== undefined) updateData.waApiVersion = waApiVersion || null;
+    if (waPhoneNumberId !== undefined) updateData.waPhoneNumberId = waPhoneNumberId || null;
+    if (waAccessToken !== undefined) updateData.waAccessToken = waAccessToken || null;
+    if (waTemplateId !== undefined) updateData.waTemplateId = waTemplateId || null;
+    if (waTemplateLang !== undefined) updateData.waTemplateLang = waTemplateLang || null;
+    if (waTemplateJson !== undefined) updateData.waTemplateJson = waTemplateJson || null;
 
     const updatedFirm = await FIRM.findByIdAndUpdate(firmId, updateData, { new: true });
     return res.status(200).json({ status: "Success", message: "Firm updated successfully", data: updatedFirm });
