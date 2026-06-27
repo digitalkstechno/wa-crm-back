@@ -86,10 +86,27 @@ exports.fetchAllGroups = async (req, res) => {
       count: g.members?.length || 0
     }));
 
+    // Fetch ungrouped customers
+    const ungroupedCustomers = await Customer.find({ group: null }).select('name phone _id');
+
+    // Create virtual group for ungrouped customers
+    const ungroupedGroup = {
+      _id: '000000000000000000000000',
+      name: 'Ungrouped',
+      color: '#9ca3af', // gray-400
+      members: ungroupedCustomers,
+      count: ungroupedCustomers.length
+    };
+
+    const finalData = [...groupsWithCount];
+    if (ungroupedCustomers.length > 0) {
+      finalData.push(ungroupedGroup);
+    }
+
     return res.status(200).json({
       status: "Success",
       message: "Customer-Groups fetched successfully",
-      data: groupsWithCount,
+      data: finalData,
     });
   } catch (error) {
     return res.status(500).json({

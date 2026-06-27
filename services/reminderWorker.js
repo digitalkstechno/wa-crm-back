@@ -21,9 +21,13 @@ const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
     throw new Error('WA_ACCESS_TOKEN is missing in environment variables');
   }
 
-  const cleanPhone = phone.replace(/[^0-9]/g, '');
-  const senderPhone = cleanPhone.startsWith('91') ? cleanPhone : `91${cleanPhone}`;
-  console.log('cleanPhone', cleanPhone, 'senderPhone', senderPhone);
+  let senderPhone = phone.replace(/[^0-9]/g, '');
+  if (!phone.startsWith('+')) {
+    if (!senderPhone.startsWith('91')) {
+      senderPhone = `91${senderPhone}`;
+    }
+  }
+  console.log('cleanPhone (digits only):', senderPhone, 'senderPhone:', senderPhone);
 
   const url = `${WA_API_DOMAIN}/api/meta/${WA_API_VERSION}/${WA_PHONE_NUMBER_ID}/messages`;
 
@@ -99,8 +103,24 @@ const getRecipients = async (reminder) => {
   } else if (reminder.recipientType === 'groups') {
     // Find all customers belonging to these groups
     if (reminder.groups && reminder.groups.length > 0) {
-      const groupIds = reminder.groups.map(g => g._id || g);
-      const customers = await Customer.find({ group: { $in: groupIds } })
+      const UNGROUPED_GROUP_ID = '000000000000000000000000';
+      const rawIds = reminder.groups.map(g => (g._id || g).toString());
+      const groupIds = rawIds.filter(id => id !== UNGROUPED_GROUP_ID);
+      const hasUngrouped = rawIds.includes(UNGROUPED_GROUP_ID);
+
+      let query;
+      if (hasUngrouped) {
+        query = {
+          $or: [
+            { group: { $in: groupIds } },
+            { group: null }
+          ]
+        };
+      } else {
+        query = { group: { $in: groupIds } };
+      }
+
+      const customers = await Customer.find(query)
         .select('name phone')
         .lean();
       for (const c of customers) {
