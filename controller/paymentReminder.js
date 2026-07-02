@@ -1,0 +1,154 @@
+const REMINDER = require("../model/paymentReminder");
+
+exports.createReminder = async (req, res) => {
+  try {
+    const { template, customMessage, ...rest } = req.body;
+
+    if (!template && !customMessage?.trim()) {
+      return res.status(400).json({ status: 'Fail', message: 'Either a template or a custom message is required.' });
+    }
+
+    const reminderData = {
+      ...rest,
+      ...(template ? { template } : {}),
+      ...(customMessage ? { customMessage } : {}),
+      createdBy: req.user._id,
+    };
+
+    const paymentReminder = await REMINDER.create(reminderData);
+
+    return res.status(201).json({
+      status: "Success",
+      message: "PaymentReminder created successfully",
+      data: paymentReminder,
+    });
+  } catch (error) {
+    return res.status(400).json({
+      status: "Fail",
+      message: error.message,
+    });
+  }
+};
+
+exports.getReminders = async (req, res) => {
+  try {
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 20;
+    const skip = (page - 1) * limit;
+
+    const query = { createdBy: req.user._id };
+
+    const filterType = req.query.filterType || 'all';
+    if (filterType === 'upcoming') {
+      query.status = { $in: ['Scheduled', 'Pending'] };
+       query.scheduledAt = { $gte: new Date() };
+    } else if (filterType === 'completed') {
+      query.status = 'Sent';
+    } else if (filterType === 'failed') {
+      query.status = 'Failed';
+    }
+
+    // Run data + count + stats in parallel (single DB roundtrip pattern)
+    const [paymentReminders, total, statsAgg] = await Promise.all([
+      REMINDER.find(query)
+        .populate('customer', 'name phone')
+        .populate('customers', 'name phone')
+        .populate('groups', 'name color')
+        .populate('template', 'name body')
+        .sort({ scheduledAt: filterType === 'completed' ? -1 : 1 })
+        .skip(skip)
+        .limit(limit)
+        .lean(),
+      REMINDER.countDocuments(query),
+      // Single aggregation for all stats instead of 3 separate countDocuments
+      REMINDER.aggregate([
+        { $match: { createdBy: req.user._id } },
+        {
+          $group: {
+            _id: null,
+            sent: { $sum: { $cond: [{ $eq: ['$status', 'Sent'] }, 1, 0] } },
+            pending: { $sum: { $cond: [{ $in: ['$status', ['Scheduled', 'Pending']] }, 1, 0] } },
+            failed: { $sum: { $cond: [{ $eq: ['$status', 'Failed'] }, 1, 0] } },
+          },
+        },
+      ]),
+    ]);
+
+    const stats = statsAgg[0] || { sent: 0, pending: 0, failed: 0 };
+
+    return res.status(200).json({
+      status: "Success",
+      data: paymentReminders,
+      stats: { sent: stats.sent, pending: stats.pending, failed: stats.failed },
+      pagination: {
+        totalRecords: total,
+        currentPage: page,
+        totalPages: Math.ceil(total / limit),
+        limit,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({
+      status: "Fail",
+      message: error.message,
+    });
+  }
+};
+
+exports.getReminderById = async (req, res) => {
+  try {
+    const paymentReminder = await REMINDER.findById(req.params.id)
+      .populate('customer', 'name phone')
+      .populate('customers', 'name phone')
+      .populate('groups', 'name color')
+      .populate('template', 'name body')
+      .lean();
+
+    if (!paymentReminder) throw new Error("PaymentReminder not found");
+
+    return res.status(200).json({
+      status: "Success",
+      data: paymentReminder,
+    });
+  } catch (error) {
+    return res.status(404).json({
+      status: "Fail",
+      message: error.message,
+    });
+  }
+};
+
+exports.updateReminder = async (req, res) => {
+  try {
+    const paymentReminder = await REMINDER.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    if (!paymentReminder) throw new Error("PaymentReminder not found");
+
+    return res.status(200).json({
+      status: "Success",
+      message: "PaymentReminder updated successfully",
+      data: paymentReminder,
+    });
+  } catch (error) {
+    return res.status(404).json({
+      status: "Fail",
+      message: error.message,
+    });
+  }
+};
+
+exports.deleteReminder = async (req, res) => {
+  try {
+    const paymentReminder = await REMINDER.findByIdAndDelete(req.params.id);
+    if (!paymentReminder) throw new Error("PaymentReminder not found");
+
+    return res.status(200).json({
+      status: "Success",
+      message: "PaymentReminder deleted successfully",
+    });
+  } catch (error) {
+    return res.status(404).json({
+      status: "Fail",
+      message: error.message,
+    });
+  }
+};

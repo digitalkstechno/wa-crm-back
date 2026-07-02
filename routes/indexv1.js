@@ -7,6 +7,7 @@ router.use("/customers", require("./customer"));
 router.use("/customer-groups", require("./customerGroup"));
 router.use("/templates", require("./template"));
 router.use("/reminders", require("./reminder"));
+router.use("/payment-reminders", require("./paymentReminder"));
 router.use("/dashboard", require("./dashboard"));
 
 module.exports = router;

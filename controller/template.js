@@ -2,8 +2,8 @@ const Template = require('../model/template');
 
 exports.createTemplate = async (req, res) => {
   try {
-    const { name, body } = req.body;
-    const template = await Template.create({ name, body });
+    const { name, body, templateType } = req.body;
+    const template = await Template.create({ name, body, templateType });
     return res.status(201).json({ status: 'Success', data: template });
   } catch (error) {
     return res.status(400).json({ status: 'Fail', message: error.message });
@@ -20,6 +20,10 @@ exports.getAllTemplates = async (req, res) => {
     const query = search
       ? { $or: [{ name: { $regex: search, $options: 'i' } }, { body: { $regex: search, $options: 'i' } }] }
       : {};
+
+    if (req.query.templateType) {
+      query.templateType = req.query.templateType;
+    }
 
     const [templates, total] = await Promise.all([
       Template.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -38,8 +42,8 @@ exports.getAllTemplates = async (req, res) => {
 
 exports.updateTemplate = async (req, res) => {
   try {
-    const { name, body } = req.body;
-    const template = await Template.findByIdAndUpdate(req.params.id, { name, body }, { new: true });
+    const { name, body, templateType } = req.body;
+    const template = await Template.findByIdAndUpdate(req.params.id, { name, body, templateType }, { new: true });
     if (!template) throw new Error('Template not found');
     return res.status(200).json({ status: 'Success', data: template });
   } catch (error) {

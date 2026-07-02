@@ -1,9 +1,11 @@
 const dotenv = require("dotenv");
 const connectDB = require("./config/db");
 const { initReminderWorker } = require("./services/reminderWorker");
+const { initPaymentReminderWorker } = require("./services/paymentReminderWorker");
 dotenv.config();
 connectDB();
 initReminderWorker();
+initPaymentReminderWorker();
 var createError = require("http-errors");
 var express = require("express");
 var path = require("path");
