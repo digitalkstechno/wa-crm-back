@@ -52,10 +52,6 @@ const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
             },
             {
               type: "text",
-              text: Math.random().toString().slice(2,8)
-            },
-            {
-              type: "text",
               text: templateBody
             }
           ]
