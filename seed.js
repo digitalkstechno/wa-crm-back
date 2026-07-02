@@ -15,15 +15,15 @@ const seedStaff = async () => {
   }
 
   await STAFF.create({
-    fullName: 'Prince',
-    email: 'prince@gmail.com',
+    fullName: 'Admin',
+    email: 'admin@gmail.com',
     phone: '9999999999',
-    password: encryptData('12345678'),
+    password: encryptData('123456'),
   });
 
   console.log('Staff seeded successfully!');
-  console.log('Email    : prince@gmail.com');
-  console.log('Password : 12345678');
+  console.log('Email    : admin@gmail.com');
+  console.log('Password : 123456');
   process.exit(0);
 };
 
