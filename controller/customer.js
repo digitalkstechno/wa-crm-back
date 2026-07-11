@@ -31,6 +31,10 @@ exports.getAllCustomers = async (req, res) => {
         }
       : {};
 
+    if (req.query.unassigned === 'true') {
+      query.group = null;
+    }
+
     const [customers, total] = await Promise.all([
       Customer.find(query).populate('group', 'name color').sort({ createdAt: -1 }).skip(skip).limit(limit),
       Customer.countDocuments(query),
@@ -161,5 +165,23 @@ exports.exportExcel = async (req, res) => {
   } catch (error) {
     console.error('Export Error:', error);
     return res.status(500).json({ status: 'Fail', message: error.message });
+  }
+};
+
+exports.assignGroup = async (req, res) => {
+  try {
+    const { customerIds, groupId } = req.body;
+    if (!customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
+      return res.status(400).json({ status: 'Fail', message: 'No customers selected' });
+    }
+    
+    await Customer.updateMany(
+      { _id: { $in: customerIds } },
+      { $set: { group: groupId } }
+    );
+    
+    return res.status(200).json({ status: 'Success', message: 'Customers assigned to group successfully' });
+  } catch (error) {
+    return res.status(400).json({ status: 'Fail', message: error.message });
   }
 };
