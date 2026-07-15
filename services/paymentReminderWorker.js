@@ -1,5 +1,5 @@
 const cron = require('node-cron');
-const REMINDER = require('../model/paymentReminder');
+const PaymentReminder = require('../model/paymentReminder');
 const Customer = require('../model/customer');
 
 const BATCH_SIZE = 50;
@@ -9,13 +9,19 @@ let isProcessing = false;
  * Send a WhatsApp template message to a single phone number.
  * arg1 = customer name, arg2 = paymentReminder ID, arg3 = template body
  */
-const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
+const sendWhatsApp = async (phone, customerName, reminderId, templateBody, templateLanguage) => {
   const WA_API_DOMAIN = process.env.WA_API_DOMAIN || 'https://crmapi.crmbot.in';
   const WA_API_VERSION = process.env.WA_API_VERSION || 'v19.0';
   const WA_PHONE_NUMBER_ID = process.env.WA_PHONE_NUMBER_ID || '730141010176205';
   const WA_ACCESS_TOKEN = process.env.WA_ACCESS_TOKEN;
-  const WA_TEMPLATE_ID = process.env.WA_TEMPLATE_ID || 'order_data';
-  const WA_TEMPLATE_LANG = process.env.WA_TEMPLATE_LANG || 'en';
+  
+  const WA_TEMPLATE_LANG = templateLanguage || 'en';
+  let WA_TEMPLATE_ID = 'message__';
+  if (WA_TEMPLATE_LANG === 'gu') {
+    WA_TEMPLATE_ID = 'message_template';
+  } else if (WA_TEMPLATE_LANG === 'hi') {
+    WA_TEMPLATE_ID = 'message__02';
+  }
 
   if (!WA_ACCESS_TOKEN) {
     throw new Error('WA_ACCESS_TOKEN is missing in environment variables');
@@ -48,10 +54,6 @@ const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
           parameters: [
             {
               type: "text",
-              text: customerName
-            },
-            {
-              type: "text",
               text: templateBody
             }
           ]
@@ -59,6 +61,9 @@ const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
       ]
     }
   };
+
+  console.log(`\n[WA API] Sending template to: ${senderPhone}`);
+  console.log(`[WA API] Request Payload:`, JSON.stringify(payload, null, 2));
 
   const res = await fetch(url, {
     method: 'POST',
@@ -70,13 +75,20 @@ const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
   });
 
   const resText = await res.text();
-  console.log(`[WA API] Status: ${res.status}, Response: ${resText}`);
-
-  if (!res.ok) {
-    throw new Error(`WA API ${res.status}: ${resText}`);
+  let resData;
+  try {
+    resData = JSON.parse(resText);
+  } catch (e) {
+    resData = resText;
   }
 
-  try { return JSON.parse(resText); } catch { return resText; }
+  if (res.ok) {
+    console.log(`[WA API] Success Response for ${senderPhone}:`, JSON.stringify(resData, null, 2));
+    return resData;
+  } else {
+    console.error(`[WA API] Error Response for ${senderPhone} (Status: ${res.status}):`, JSON.stringify(resData, null, 2));
+    throw new Error(`WA API ${res.status}: ${resText}`);
+  }
 };
 
 /**
@@ -190,22 +202,37 @@ const initPaymentReminderWorker = () => {
 
     try {
       const now = new Date();
+      console.log(`[Worker] Cron running at ${now.toISOString()}. Querying due paymentReminders...`);
+
+      // debug: try to fetch any payment reminder that is scheduled
+      const scheduledDocs = await PaymentReminder.find({ status: 'Scheduled' }, 'scheduledAt title');
+      console.log(`[Worker] DB Status Counts -> Scheduled: ${scheduledDocs.length}`);
+      if (scheduledDocs.length > 0) {
+         console.log(`[Worker] Scheduled Doc[0] scheduledAt: ${scheduledDocs[0].scheduledAt.toISOString()} (now is ${now.toISOString()})`);
+         console.log(`[Worker] Is scheduledAt <= now? ${scheduledDocs[0].scheduledAt <= now}`);
+      }
+      
+      const specificDoc = await PaymentReminder.findById('6a57660c7a8b03183b246101');
+      if (specificDoc) {
+          console.log(`[Worker] User's test document (6a57660c7a8b03183b246101) status is: ${specificDoc.status}`);
+      }
 
       // Find due paymentReminders with populated data for sending
-      const dueReminders = await REMINDER.find({
+      const dueReminders = await PaymentReminder.find({
         status: 'Scheduled',
         scheduledAt: { $lte: now },
       })
         .limit(BATCH_SIZE)
-        .populate('template', 'name body')
+        .populate('template', 'name body language')
         .populate('customers', 'name phone')
         .populate('groups', '_id name');
 
+      console.log(`[Worker] Found ${dueReminders.length} due paymentReminders.`);
       if (dueReminders.length === 0) return;
 
       // Claim batch atomically
       const ids = dueReminders.map(r => r._id);
-      await REMINDER.updateMany(
+      await PaymentReminder.updateMany(
         { _id: { $in: ids }, status: 'Scheduled' },
         { $set: { status: 'Pending' } }
       );
@@ -215,11 +242,12 @@ const initPaymentReminderWorker = () => {
       for (const paymentReminder of dueReminders) {
         try {
           const templateBody = (paymentReminder.template?.body || '').replace(/[\t\n\r]/g, ' ').replace(/ {5,}/g, '    ');
+          const templateLanguage = paymentReminder.template?.language || 'en';
           const recipients = await getRecipients(paymentReminder);
 
           if (recipients.length === 0) {
             console.warn(`[Worker] No recipients for paymentReminder ${paymentReminder._id}, marking Sent`);
-            await REMINDER.updateOne({ _id: paymentReminder._id }, { $set: { status: 'Sent' } });
+            await PaymentReminder.updateOne({ _id: paymentReminder._id }, { $set: { status: 'Sent' } });
             continue;
           }
 
@@ -227,7 +255,7 @@ const initPaymentReminderWorker = () => {
           let allSent = true;
           for (const { name, phone } of recipients) {
             try {
-              await sendWhatsApp(phone, name, paymentReminder._id, templateBody);
+              await sendWhatsApp(phone, name, paymentReminder._id, templateBody, templateLanguage);
               console.log(`[Worker] Sent to ${phone} (${name})`);
             } catch (err) {
               console.error(`[Worker] Failed sending to ${phone}:`, err.message);
@@ -235,7 +263,7 @@ const initPaymentReminderWorker = () => {
             }
           }
 
-          await REMINDER.updateOne(
+          await PaymentReminder.updateOne(
             { _id: paymentReminder._id },
             { $set: { status: allSent ? 'Sent' : 'Failed' } }
           );
@@ -249,7 +277,7 @@ const initPaymentReminderWorker = () => {
               delete doc.createdAt;
               delete doc.updatedAt;
               delete doc.__v;
-              await REMINDER.create({
+              await PaymentReminder.create({
                 ...doc,
                 scheduledAt: nextDate,
                 status: 'Scheduled',
@@ -265,7 +293,7 @@ const initPaymentReminderWorker = () => {
           }
         } catch (err) {
           console.error(`[Worker] Error processing ${paymentReminder._id}:`, err.message);
-          await REMINDER.updateOne({ _id: paymentReminder._id }, { $set: { status: 'Failed' } });
+          await PaymentReminder.updateOne({ _id: paymentReminder._id }, { $set: { status: 'Failed' } });
         }
       }
     } catch (error) {

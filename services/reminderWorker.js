@@ -9,13 +9,19 @@ let isProcessing = false;
  * Send a WhatsApp template message to a single phone number.
  * arg1 = customer name, arg2 = reminder ID, arg3 = template body
  */
-const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
+const sendWhatsApp = async (phone, customerName, reminderId, templateBody, templateLanguage) => {
   const WA_API_DOMAIN = process.env.WA_API_DOMAIN || 'https://crmapi.crmbot.in';
   const WA_API_VERSION = process.env.WA_API_VERSION || 'v19.0';
   const WA_PHONE_NUMBER_ID = process.env.WA_PHONE_NUMBER_ID || '730141010176205';
   const WA_ACCESS_TOKEN = process.env.WA_ACCESS_TOKEN;
-  const WA_TEMPLATE_ID = process.env.WA_TEMPLATE_ID || 'order_data';
-  const WA_TEMPLATE_LANG = process.env.WA_TEMPLATE_LANG || 'en';
+  
+  const WA_TEMPLATE_LANG = templateLanguage || 'en';
+  let WA_TEMPLATE_ID = 'message__';
+  if (WA_TEMPLATE_LANG === 'gu') {
+    WA_TEMPLATE_ID = 'message_template';
+  } else if (WA_TEMPLATE_LANG === 'hi') {
+    WA_TEMPLATE_ID = 'message__02';
+  }
 
   if (!WA_ACCESS_TOKEN) {
     throw new Error('WA_ACCESS_TOKEN is missing in environment variables');
@@ -48,10 +54,6 @@ const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
           parameters: [
             {
               type: "text",
-              text: customerName
-            },
-            {
-              type: "text",
               text: templateBody
             }
           ]
@@ -59,6 +61,9 @@ const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
       ]
     }
   };
+
+  console.log(`\n[WA API] Sending template to: ${senderPhone}`);
+  console.log(`[WA API] Request Payload:`, JSON.stringify(payload, null, 2));
 
   const res = await fetch(url, {
     method: 'POST',
@@ -70,13 +75,20 @@ const sendWhatsApp = async (phone, customerName, reminderId, templateBody) => {
   });
 
   const resText = await res.text();
-  console.log(`[WA API] Status: ${res.status}, Response: ${resText}`);
-
-  if (!res.ok) {
-    throw new Error(`WA API ${res.status}: ${resText}`);
+  let resData;
+  try {
+    resData = JSON.parse(resText);
+  } catch (e) {
+    resData = resText;
   }
 
-  try { return JSON.parse(resText); } catch { return resText; }
+  if (res.ok) {
+    console.log(`[WA API] Success Response for ${senderPhone}:`, JSON.stringify(resData, null, 2));
+    return resData;
+  } else {
+    console.error(`[WA API] Error Response for ${senderPhone} (Status: ${res.status}):`, JSON.stringify(resData, null, 2));
+    throw new Error(`WA API ${res.status}: ${resText}`);
+  }
 };
 
 /**
@@ -190,6 +202,7 @@ const initReminderWorker = () => {
 
     try {
       const now = new Date();
+      console.log(`[Worker] Cron running at ${now.toISOString()}. Querying due reminders...`);
 
       // Find due reminders with populated data for sending
       const dueReminders = await REMINDER.find({
@@ -197,10 +210,11 @@ const initReminderWorker = () => {
         scheduledAt: { $lte: now },
       })
         .limit(BATCH_SIZE)
-        .populate('template', 'name body')
+        .populate('template', 'name body language')
         .populate('customers', 'name phone')
         .populate('groups', '_id name');
 
+      console.log(`[Worker] Found ${dueReminders.length} due reminders.`);
       if (dueReminders.length === 0) return;
 
       // Claim batch atomically
@@ -215,6 +229,7 @@ const initReminderWorker = () => {
       for (const reminder of dueReminders) {
         try {
           const templateBody = (reminder.template?.body || '').replace(/[\t\n\r]/g, ' ').replace(/ {5,}/g, '    ');
+          const templateLanguage = reminder.template?.language || 'en';
           const recipients = await getRecipients(reminder);
 
           if (recipients.length === 0) {
@@ -227,7 +242,7 @@ const initReminderWorker = () => {
           let allSent = true;
           for (const { name, phone } of recipients) {
             try {
-              await sendWhatsApp(phone, name, reminder._id, templateBody);
+              await sendWhatsApp(phone, name, reminder._id, templateBody, templateLanguage);
               console.log(`[Worker] Sent to ${phone} (${name})`);
             } catch (err) {
               console.error(`[Worker] Failed sending to ${phone}:`, err.message);
