@@ -80,6 +80,21 @@ exports.deleteCustomer = async (req, res) => {
   }
 };
 
+exports.bulkDeleteCustomers = async (req, res) => {
+  try {
+    const { customerIds } = req.body;
+    if (!customerIds || !Array.isArray(customerIds) || customerIds.length === 0) {
+      return res.status(400).json({ status: 'Fail', message: 'No customers selected' });
+    }
+    
+    await Customer.deleteMany({ _id: { $in: customerIds } });
+    
+    return res.status(200).json({ status: 'Success', message: 'Customers deleted successfully' });
+  } catch (error) {
+    return res.status(400).json({ status: 'Fail', message: error.message });
+  }
+};
+
 exports.exportExcel = async (req, res) => {
   try {
     const { groupId } = req.query;
