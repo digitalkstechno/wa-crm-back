@@ -1,6 +1,7 @@
 const Customer = require('../model/customer');
 const CustomerGroup = require('../model/customerGroup');
 const ExcelJS = require('exceljs');
+const mongoose = require('mongoose');
 
 
 exports.createCustomer = async (req, res) => {
@@ -33,6 +34,18 @@ exports.getAllCustomers = async (req, res) => {
 
     if (req.query.unassigned === 'true') {
       query.group = null;
+    } else if (req.query.group || req.query.groupId) {
+      const gParam = req.query.group || req.query.groupId;
+      if (mongoose.Types.ObjectId.isValid(gParam)) {
+        query.group = gParam;
+      } else {
+        const foundGroup = await CustomerGroup.findOne({ name: { $regex: `^${gParam}$`, $options: 'i' } });
+        if (foundGroup) {
+          query.group = foundGroup._id;
+        } else {
+          query.group = gParam;
+        }
+      }
     }
 
     const [customers, total] = await Promise.all([
@@ -58,9 +71,17 @@ exports.getAllCustomers = async (req, res) => {
 exports.updateCustomer = async (req, res) => {
   try {
     const { name, phone, email, tags, group, notes } = req.body;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (phone !== undefined) updateData.phone = phone;
+    if (email !== undefined) updateData.email = email;
+    if (tags !== undefined) updateData.tags = tags;
+    if (group !== undefined) updateData.group = group || null;
+    if (notes !== undefined) updateData.notes = notes;
+
     const customer = await Customer.findByIdAndUpdate(
       req.params.id,
-      { name, phone, email, tags, group: group || null, notes },
+      updateData,
       { new: true }
     ).populate('group', 'name color');
     if (!customer) throw new Error('Customer not found');
